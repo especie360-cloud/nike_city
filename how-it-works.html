@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=how-hero-02">
   </head>
   <body>
     <header class="top-nav" aria-label="Navegación principal">
@@ -25,14 +25,125 @@
       </div>
     </header>
 
-    <main>
-      <section class="coming-screen" id="how" aria-label="How it works coming soon">
-        <div>
-          <span>How it works</span>
-          <h2>Coming soon</h2>
-          <p>We are preparing the guided flow for exploring Nike City districts, rewards and movement paths.</p>
-          <a class="cta secondary" href="index.html" data-page-transition>Back Home <b>→</b></a>
+    <main class="how-page">
+      <section class="how-hero" id="how" aria-label="How Nike City works">
+        <div class="how-hero-copy">
+          <span class="section-kicker">How it works</span>
+          <h1>
+            Move through
+            <span>Nike City</span>
+            your way.
+          </h1>
+          <p>Explore modular districts, unlock product stories, follow movement paths and jump into zones built around sport, style and play.</p>
+          <div class="hero-ctas">
+            <a class="cta primary" href="nike-city.html" data-page-transition>Enter Nike City <b>→</b></a>
+            <a class="cta secondary" href="#journey">See the flow <b>↓</b></a>
+          </div>
         </div>
+
+        <div class="how-hero-visual" data-parallax data-speed="-12">
+          <div class="how-orbit"></div>
+          <div class="how-device">
+            <span class="device-pin pin-one"></span>
+            <span class="device-pin pin-two"></span>
+            <span class="device-pin pin-three"></span>
+            <div class="device-road"></div>
+            <svg class="device-route" viewBox="0 0 100 70" aria-hidden="true">
+              <path d="M16 50 C28 18 42 52 54 24 C66 -2 76 20 86 12"></path>
+            </svg>
+            <div class="device-card">
+              <i>01</i>
+              <strong>Choose a district</strong>
+              <small>Soccer, Running, Casual, Skate and more.</small>
+            </div>
+          </div>
+          <div class="floating-badge badge-a">Zones</div>
+          <div class="floating-badge badge-b">Rewards</div>
+          <div class="floating-badge badge-c">Paths</div>
+        </div>
+      </section>
+
+      <section class="how-statement" aria-label="Nike City concept">
+        <p data-reveal-line>Nike City is a living map where every module becomes a small experience: discover a zone, interact with it, collect a story and keep moving.</p>
+      </section>
+
+      <section class="how-journey" id="journey" aria-label="How the experience flows">
+        <div class="section-heading">
+          <span class="section-kicker">The flow</span>
+          <h2>From map to movement in four steps.</h2>
+        </div>
+        <div class="journey-rail">
+          <article class="journey-card" data-step-card>
+            <span>01</span>
+            <h3>Land in the city</h3>
+            <p>Start from the central map and rotate, zoom or move around the isometric world.</p>
+          </article>
+          <article class="journey-card" data-step-card>
+            <span>02</span>
+            <h3>Pick a district</h3>
+            <p>Tap a pin to open zones like Soccer, Basketball, Running, Casual, Skate Park or Metro.</p>
+          </article>
+          <article class="journey-card" data-step-card>
+            <span>03</span>
+            <h3>Unlock the layer</h3>
+            <p>Each module can reveal products, stories, challenges, rewards or guided routes.</p>
+          </article>
+          <article class="journey-card" data-step-card>
+            <span>04</span>
+            <h3>Keep moving</h3>
+            <p>Follow paths between districts and build your own way through Nike City.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="how-capabilities" aria-label="What users can do">
+        <div class="section-heading">
+          <span class="section-kicker">What you can do</span>
+          <h2>Designed for exploring, playing and discovering.</h2>
+        </div>
+        <div class="capability-grid">
+          <article class="capability-card">
+            <div class="placeholder-media media-map"></div>
+            <h3>Navigate the map</h3>
+            <p>Move through a modular 3D city and understand where every sport zone lives.</p>
+          </article>
+          <article class="capability-card">
+            <div class="placeholder-media media-product"></div>
+            <h3>Discover drops</h3>
+            <p>Connect districts with product collections, hero objects and seasonal launches.</p>
+          </article>
+          <article class="capability-card">
+            <div class="placeholder-media media-challenge"></div>
+            <h3>Follow challenges</h3>
+            <p>Use routes, missions and pins to create repeatable journeys inside the experience.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="how-parallax" aria-label="Interactive city layers">
+        <div class="parallax-stage">
+          <div class="parallax-map" data-parallax data-speed="-20">
+            <span></span><span></span><span></span><span></span>
+          </div>
+          <div class="parallax-panel" data-parallax data-speed="14">
+            <span class="section-kicker">City layers</span>
+            <h2>A city built in modules.</h2>
+            <p>As Blender assets are completed, each zone can drop into the same system without rebuilding the whole experience.</p>
+            <ul>
+              <li>3D districts</li>
+              <li>HTML labels and pins</li>
+              <li>Animated transitions</li>
+              <li>Future reward logic</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="how-final" id="contact" aria-label="Enter Nike City">
+        <span class="section-kicker">Ready?</span>
+        <h2>Start exploring the city.</h2>
+        <p>Jump into the live Nike City map and test the first interactive version while the modular districts keep evolving.</p>
+        <a class="cta primary" href="nike-city.html" data-page-transition>Enter Nike City <b>→</b></a>
       </section>
     </main>
 
@@ -58,15 +169,26 @@
       <span class="wipe-cover"></span>
     </div>
 
+    <div class="morph-transition" aria-hidden="true">
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+        <path class="morph-layer morph-black"></path>
+        <path class="morph-layer morph-yellow"></path>
+        <path class="morph-layer morph-paper"></path>
+      </svg>
+      <span class="morph-logo"></span>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/animejs@3.2.2/lib/anime.min.js"></script>
     <script type="importmap">
       {
         "imports": {
           "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
-          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/",
+          "gsap": "./node_modules/gsap/index.js",
+          "gsap/": "./node_modules/gsap/"
         }
       }
     </script>
-    <script type="module" src="script.js"></script>
+    <script type="module" src="script.js?v=how-hero-02"></script>
   </body>
 </html>

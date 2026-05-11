@@ -164,71 +164,36 @@ def rounded_square_base():
 
 
 def swoosh():
-    before = set(bpy.data.objects)
-    if NIKE_SWOOSH_SVG.exists():
-        bpy.ops.import_curve.svg(filepath=str(NIKE_SWOOSH_SVG))
-        imported = [obj for obj in bpy.data.objects if obj not in before]
-        for obj in imported:
-            obj.name = "real SVG Nike swoosh on roof"
-            obj.data.materials.clear()
-            assign(obj, M["white"])
-            if hasattr(obj.data, "dimensions"):
-                obj.data.dimensions = "2D"
-            if hasattr(obj.data, "fill_mode"):
-                obj.data.fill_mode = "BOTH"
-            if hasattr(obj.data, "extrude"):
-                obj.data.extrude = 0.0006
-            obj.rotation_euler = (0, 0, 0)
-            obj.location = (0, 0, 0)
-
-        bpy.context.view_layer.update()
-        world_corners = []
-        for obj in imported:
-            world_corners.extend([obj.matrix_world @ mathutils.Vector(corner) for corner in obj.bound_box])
-        min_x = min(corner.x for corner in world_corners)
-        max_x = max(corner.x for corner in world_corners)
-        min_y = min(corner.y for corner in world_corners)
-        max_y = max(corner.y for corner in world_corners)
-        width = max_x - min_x or 1
-        height = max_y - min_y or 1
-        target_width = 0.72
-        scale_factor = target_width / width
-        cx = (min_x + max_x) * 0.5
-        cy = (min_y + max_y) * 0.5
-
-        empty = bpy.data.objects.new("roof swoosh svg group", None)
-        bpy.context.collection.objects.link(empty)
-        empty.location = (-0.02, -0.02, 1.158)
-        empty.rotation_euler = (0, 0, math.radians(-18))
-
-        for obj in imported:
-            obj.location.x -= cx
-            obj.location.y -= cy
-            obj.location.z = 0
-            obj.scale = (scale_factor, scale_factor, scale_factor)
-            bpy.context.view_layer.objects.active = obj
-            obj.select_set(True)
-            bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
-            obj.select_set(False)
-            obj.rotation_euler = (0, 0, 0)
-            obj.parent = empty
-            obj.location = (0, -height * scale_factor * 0.08, 0)
-            obj.scale.x *= 1.18
-            obj.scale.y *= 0.72
-        return empty
-
-    points = [(-0.68, -0.06, 0), (-0.44, -0.2, 0), (-0.16, -0.12, 0), (0.78, 0.14, 0), (0.04, 0.03, 0), (-0.43, 0.16, 0), (-0.70, 0.12, 0)]
+    points = [
+        (-0.54, -0.09, 0),
+        (-0.49, -0.16, 0),
+        (-0.39, -0.205, 0),
+        (-0.27, -0.19, 0),
+        (-0.10, -0.125, 0),
+        (0.13, -0.025, 0),
+        (0.43, 0.11, 0),
+        (0.62, 0.20, 0),
+        (0.66, 0.185, 0),
+        (0.38, 0.055, 0),
+        (0.13, -0.035, 0),
+        (-0.10, -0.085, 0),
+        (-0.29, -0.08, 0),
+        (-0.43, -0.015, 0),
+        (-0.53, 0.085, 0),
+        (-0.58, 0.055, 0),
+        (-0.58, -0.015, 0),
+    ]
     mesh = bpy.data.meshes.new("fallback swoosh mesh")
-    mesh.from_pydata(points, [], [(0, 1, 2, 3, 4, 5, 6)])
+    mesh.from_pydata(points, [], [tuple(range(len(points)))])
     mesh.update()
-    obj = bpy.data.objects.new("fallback white nike swoosh on roof", mesh)
+    obj = bpy.data.objects.new("clean raised white nike swoosh on roof", mesh)
     bpy.context.collection.objects.link(obj)
-    obj.location = (0, -0.02, 1.18)
-    obj.scale = (0.72, 0.48, 0.72)
-    obj.rotation_euler = (0, 0, math.radians(-8))
+    obj.location = (-0.10, -0.12, 1.052)
+    obj.scale = (0.58, 0.70, 1)
+    obj.rotation_euler = (0, 0, math.radians(46))
     assign(obj, M["white"])
     solid = obj.modifiers.new("raised roof logo thickness", "SOLIDIFY")
-    solid.thickness = 0.018
+    solid.thickness = 0.024
     bevel(obj, 0.004, 1)
     return obj
 

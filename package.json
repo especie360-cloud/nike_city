@@ -1,0 +1,9 @@
+{
+  "name": "nike-city",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Nike City interactive modular web experience.",
+  "dependencies": {
+    "gsap": "^3.13.0"
+  }
+}

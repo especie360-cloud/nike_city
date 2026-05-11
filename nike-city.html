@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=how-hero-02">
   </head>
   <body>
     <header class="top-nav" aria-label="Navegación principal">
@@ -69,15 +69,26 @@
       <span class="wipe-cover"></span>
     </div>
 
+    <div class="morph-transition" aria-hidden="true">
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+        <path class="morph-layer morph-black"></path>
+        <path class="morph-layer morph-yellow"></path>
+        <path class="morph-layer morph-paper"></path>
+      </svg>
+      <span class="morph-logo"></span>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/animejs@3.2.2/lib/anime.min.js"></script>
     <script type="importmap">
       {
         "imports": {
           "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
-          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/",
+          "gsap": "./node_modules/gsap/index.js",
+          "gsap/": "./node_modules/gsap/"
         }
       }
     </script>
-    <script type="module" src="script.js"></script>
+    <script type="module" src="script.js?v=how-hero-02"></script>
   </body>
 </html>

@@ -1,6 +1,13 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { gsap } from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger.js";
+import { MotionPathPlugin } from "gsap/MotionPathPlugin.js";
+import { Draggable } from "gsap/Draggable.js";
+import { Flip } from "gsap/Flip.js";
+import { TextPlugin } from "gsap/TextPlugin.js";
+import { MorphSVGPlugin } from "gsap/MorphSVGPlugin.js";
 
 const canvas = document.querySelector("#city");
 const citySection = document.querySelector("#city-section");
@@ -8,12 +15,71 @@ const labelLayer = document.querySelector("#labels");
 const homeSection = document.querySelector("#home");
 const anime = window.anime;
 const transitionWipe = document.querySelector(".transition-wipe");
+const morphTransition = document.querySelector(".morph-transition");
+const morphLayers = morphTransition ? [...morphTransition.querySelectorAll(".morph-layer")] : [];
+const morphLogo = morphTransition?.querySelector(".morph-logo");
+gsap.registerPlugin(ScrollTrigger, MotionPathPlugin, Draggable, Flip, TextPlugin, MorphSVGPlugin);
+window.NikeCityGSAP = { gsap, ScrollTrigger, MotionPathPlugin, Draggable, Flip, TextPlugin, MorphSVGPlugin };
 const TRANSICION_HOME_CIUDAD = {
   name: "TRANSICION_HOME_CIUDAD",
   description: "Organic curved white/yellow/black wipe used to move from the home hero into another Nike City screen."
 };
 const USE_BLENDER_PLAZA_CENTRAL = true;
 const PLAZA_CENTRAL_GLB = "assets/zona_plaza_central_ultra_blender.glb";
+const MORPH_PATHS = {
+  below: "M0 126 C16 113 32 141 50 126 C68 111 84 141 100 126 L100 176 C82 164 68 182 50 168 C32 154 18 182 0 168 Z",
+  blackCover: "M0 -52 C14 -32 28 -68 46 -48 C62 -30 78 -70 100 -42 L100 176 C82 164 68 182 50 168 C32 154 18 182 0 168 Z",
+  yellowCover: "M0 -66 C18 -44 30 -78 49 -54 C66 -34 82 -82 100 -50 L100 176 C82 164 68 182 50 168 C32 154 18 182 0 168 Z",
+  paperCover: "M0 -82 C20 -60 34 -92 52 -68 C70 -48 86 -88 100 -62 L100 176 C82 164 68 182 50 168 C32 154 18 182 0 168 Z",
+  cover: "M0 -82 C20 -60 34 -92 52 -68 C70 -48 86 -88 100 -62 L100 176 C82 164 68 182 50 168 C32 154 18 182 0 168 Z",
+  above: "M0 -176 C16 -189 32 -161 50 -176 C68 -191 84 -161 100 -176 L100 -126 C82 -138 68 -120 50 -134 C32 -148 18 -120 0 -134 Z"
+};
+const DYNAMIC_MORPH = {
+  points: 10,
+  below: 132,
+  coverBlack: -48,
+  coverYellow: -62,
+  coverPaper: -82,
+  above: -124,
+  bottom: 176
+};
+
+function createMorphPoints(y) {
+  return Array.from({ length: DYNAMIC_MORPH.points }, () => ({ y }));
+}
+
+function drawDynamicMorph(points, mode = "bottom") {
+  const step = 100 / (points.length - 1);
+  let path = mode === "top" ? `M 0 0 V ${points[0].y}` : `M 0 ${points[0].y}`;
+
+  for (let i = 1; i < points.length; i += 1) {
+    const x = i * step;
+    const midX = x - step / 2;
+    path += ` C ${midX} ${points[i - 1].y} ${midX} ${points[i].y} ${x} ${points[i].y}`;
+  }
+
+  if (mode === "top") return `${path} V 0 H 0 Z`;
+  return `${path} V ${DYNAMIC_MORPH.bottom} H 0 Z`;
+}
+
+function setDynamicMorph(layer, points, mode) {
+  if (!layer) return;
+  layer.setAttribute("d", drawDynamicMorph(points, mode));
+}
+
+function tweenDynamicMorph(layer, points, y, mode, vars = {}) {
+  const staggerFrom = vars.staggerFrom || "center";
+  return gsap.to(points, {
+    y,
+    duration: vars.duration || 1.8,
+    ease: vars.ease || "elastic.out(0.85, 0.46)",
+    stagger: {
+      each: vars.each || 0.075,
+      from: staggerFrom
+    },
+    onUpdate: () => setDynamicMorph(layer, points, mode)
+  });
+}
 
 const COLORS = {
   yellow: 0xf7bd00,
@@ -782,6 +848,173 @@ function bootHomeAnimations() {
 
 }
 
+function bootHowPageAnimations() {
+  const page = document.querySelector(".how-page");
+  if (!page) return;
+
+  gsap.set([
+    ".how-hero-copy .section-kicker",
+    ".how-hero h1",
+    ".how-hero-copy p",
+    ".how-hero .cta",
+    ".how-hero-visual"
+  ], { autoAlpha: 0, y: 34 });
+
+  gsap.timeline({ defaults: { ease: "power3.out" } })
+    .to(".top-nav > *", { autoAlpha: 1, y: 0, duration: 0.75, stagger: 0.08 }, 0)
+    .to(".how-hero-copy .section-kicker", { autoAlpha: 1, y: 0, duration: 0.7 }, 0.1)
+    .to(".how-hero h1", { autoAlpha: 1, y: 0, duration: 0.9 }, 0.22)
+    .to(".how-hero-copy p", { autoAlpha: 1, y: 0, duration: 0.72 }, 0.38)
+    .to(".how-hero .cta", { autoAlpha: 1, y: 0, duration: 0.68, stagger: 0.08 }, 0.5)
+    .to(".how-hero-visual", { autoAlpha: 1, y: 0, duration: 1.05 }, 0.34)
+    .to([".bottom-menu", ".movement-card"], { autoAlpha: 1, y: 0, duration: 0.75, stagger: 0.08 }, 0.62);
+
+  gsap.to(".floating-badge", {
+    y: -18,
+    rotation: 2,
+    duration: 2.4,
+    ease: "sine.inOut",
+    repeat: -1,
+    yoyo: true,
+    stagger: 0.28
+  });
+
+  gsap.to(".device-pin", {
+    y: -10,
+    duration: 1.6,
+    ease: "sine.inOut",
+    repeat: -1,
+    yoyo: true,
+    stagger: 0.18
+  });
+
+  const hero = document.querySelector(".how-hero");
+  const visual = document.querySelector(".how-hero-visual");
+  const device = document.querySelector(".how-device");
+  const orbit = document.querySelector(".how-orbit");
+  const routePath = document.querySelector(".device-route path");
+  const enterCta = document.querySelector(".how-hero .cta.primary");
+
+  if (routePath) {
+    const routeLength = routePath.getTotalLength();
+    gsap.set(routePath, { strokeDasharray: routeLength, strokeDashoffset: routeLength });
+    gsap.to(routePath, {
+      strokeDashoffset: 0,
+      duration: 2.8,
+      ease: "power2.inOut",
+      repeat: -1,
+      repeatDelay: 0.45
+    });
+  }
+
+  if (hero && visual && device && orbit) {
+    const tiltDevice = gsap.quickTo(device, "rotationZ", { duration: 0.7, ease: "power3.out" });
+    const moveVisualX = gsap.quickTo(visual, "x", { duration: 0.75, ease: "power3.out" });
+    const moveVisualY = gsap.quickTo(visual, "y", { duration: 0.75, ease: "power3.out" });
+    const rotateOrbit = gsap.quickTo(orbit, "rotation", { duration: 0.9, ease: "power3.out" });
+
+    hero.addEventListener("pointermove", (event) => {
+      const rect = hero.getBoundingClientRect();
+      const x = (event.clientX - rect.left) / rect.width - 0.5;
+      const y = (event.clientY - rect.top) / rect.height - 0.5;
+      moveVisualX(x * 22);
+      moveVisualY(y * 18);
+      tiltDevice(-45 + x * 3);
+      rotateOrbit(-38 + x * 7);
+    });
+
+    hero.addEventListener("pointerleave", () => {
+      moveVisualX(0);
+      moveVisualY(0);
+      tiltDevice(-45);
+      rotateOrbit(-38);
+    });
+  }
+
+  if (enterCta && routePath) {
+    enterCta.addEventListener("pointerenter", () => {
+      gsap.fromTo(routePath, { strokeWidth: 4 }, { strokeWidth: 7, duration: 0.18, yoyo: true, repeat: 1, ease: "power2.out" });
+      gsap.to(".device-card", { y: -14, duration: 0.32, yoyo: true, repeat: 1, ease: "back.out(1.8)" });
+    });
+  }
+
+  document.querySelectorAll("[data-parallax]").forEach((element) => {
+    const speed = Number(element.dataset.speed || 0);
+    gsap.to(element, {
+      y: speed,
+      ease: "none",
+      scrollTrigger: {
+        trigger: element.closest("section") || element,
+        start: "top bottom",
+        end: "bottom top",
+        scrub: 1.2
+      }
+    });
+  });
+
+  gsap.from("[data-reveal-line]", {
+    y: 90,
+    autoAlpha: 0,
+    duration: 1.1,
+    ease: "power3.out",
+    scrollTrigger: {
+      trigger: ".how-statement",
+      start: "top 72%"
+    }
+  });
+
+  gsap.from("[data-step-card]", {
+    y: 80,
+    autoAlpha: 0,
+    rotate: -2,
+    duration: 0.9,
+    ease: "power3.out",
+    stagger: 0.14,
+    scrollTrigger: {
+      trigger: ".journey-rail",
+      start: "top 76%"
+    }
+  });
+
+  gsap.from(".capability-card", {
+    y: 80,
+    autoAlpha: 0,
+    scale: 0.96,
+    duration: 0.9,
+    ease: "power3.out",
+    stagger: 0.12,
+    scrollTrigger: {
+      trigger: ".capability-grid",
+      start: "top 76%"
+    }
+  });
+
+  gsap.from(".parallax-panel", {
+    x: 80,
+    autoAlpha: 0,
+    duration: 1,
+    ease: "power3.out",
+    scrollTrigger: {
+      trigger: ".how-parallax",
+      start: "top 62%"
+    }
+  });
+
+  gsap.from(".how-final > *", {
+    y: 44,
+    autoAlpha: 0,
+    duration: 0.82,
+    ease: "power3.out",
+    stagger: 0.09,
+    scrollTrigger: {
+      trigger: ".how-final",
+      start: "top 72%"
+    }
+  });
+
+  ScrollTrigger.refresh();
+}
+
 function bootIntroCards() {
   const gate = document.querySelector(".cards-gate");
   if (!gate || !anime) return;
@@ -923,6 +1156,48 @@ function resetTransition() {
 function playPageEnter() {
   sessionStorage.removeItem("nikeCityPageTransition");
   if (anime && transitionWipe) resetTransition();
+  if (!morphTransition || !morphLayers.length) return;
+
+  const shouldReveal = sessionStorage.getItem("nikeCityMorphTransition") === "in";
+  sessionStorage.removeItem("nikeCityMorphTransition");
+  const revealBlack = createMorphPoints(DYNAMIC_MORPH.below);
+  const revealYellow = createMorphPoints(DYNAMIC_MORPH.below);
+  const revealPaper = createMorphPoints(DYNAMIC_MORPH.below);
+  setDynamicMorph(morphLayers[0], revealBlack, "top");
+  setDynamicMorph(morphLayers[1], revealYellow, "top");
+  setDynamicMorph(morphLayers[2], revealPaper, "top");
+  if (morphLogo) gsap.set(morphLogo, { autoAlpha: 0, scale: 0.92 });
+
+  if (!shouldReveal) {
+    gsap.set(morphTransition, { autoAlpha: 0 });
+    return;
+  }
+
+  if (morphLogo) gsap.set(morphLogo, { autoAlpha: 1, scale: 1 });
+  gsap.set(morphTransition, { autoAlpha: 1 });
+  gsap.fromTo(document.body, { yPercent: 1.4, opacity: 0.96 }, { yPercent: 0, opacity: 1, duration: 1.55, ease: "power3.out" });
+  gsap.timeline({
+    onComplete: () => {
+      gsap.set(morphTransition, { autoAlpha: 0 });
+      if (morphLogo) gsap.set(morphLogo, { autoAlpha: 0, scale: 0.92 });
+    }
+  })
+    .to(morphLogo, { autoAlpha: 0, scale: 0.94, duration: 0.54, ease: "power2.out" }, 0.12)
+    .add(tweenDynamicMorph(morphLayers[2], revealPaper, DYNAMIC_MORPH.above, "top", {
+      duration: 2.05,
+      each: 0.09,
+      ease: "elastic.inOut(0.78, 0.56)"
+    }), 0.18)
+    .add(tweenDynamicMorph(morphLayers[1], revealYellow, DYNAMIC_MORPH.above, "top", {
+      duration: 2.1,
+      each: 0.095,
+      ease: "elastic.inOut(0.82, 0.58)"
+    }), 0.34)
+    .add(tweenDynamicMorph(morphLayers[0], revealBlack, DYNAMIC_MORPH.above, "top", {
+      duration: 2.12,
+      each: 0.1,
+      ease: "elastic.inOut(0.86, 0.6)"
+    }), 0.5);
 }
 
 function organicPageTransition(url) {
@@ -990,7 +1265,7 @@ function organicPageTransition(url) {
 function pageTransition(url) {
   if (!url) return;
 
-  if (!anime) {
+  if (!morphTransition || !morphLayers.length) {
     document.body.style.opacity = 0;
     window.setTimeout(() => {
       window.location.href = url;
@@ -998,16 +1273,40 @@ function pageTransition(url) {
     return;
   }
 
-  anime.remove(document.body);
-  anime({
-    targets: document.body,
-    opacity: [1, 0],
-    duration: 360,
-    easing: "easeInOutQuad",
-    complete: () => {
+  gsap.killTweensOf([document.body, morphTransition, morphLogo, ...morphLayers]);
+  gsap.set(morphTransition, { autoAlpha: 1 });
+  const coverBlack = createMorphPoints(DYNAMIC_MORPH.below);
+  const coverYellow = createMorphPoints(DYNAMIC_MORPH.below);
+  const coverPaper = createMorphPoints(DYNAMIC_MORPH.below);
+  setDynamicMorph(morphLayers[0], coverBlack, "bottom");
+  setDynamicMorph(morphLayers[1], coverYellow, "bottom");
+  setDynamicMorph(morphLayers[2], coverPaper, "bottom");
+  if (morphLogo) gsap.set(morphLogo, { autoAlpha: 0, scale: 0.92 });
+
+  gsap.timeline({
+    onComplete: () => {
+      sessionStorage.setItem("nikeCityMorphTransition", "in");
       window.location.href = url;
     }
-  });
+  })
+    .to(document.body, { yPercent: -1.2, opacity: 0.9, duration: 1.55, ease: "power2.inOut" }, 0)
+    .add(tweenDynamicMorph(morphLayers[0], coverBlack, DYNAMIC_MORPH.coverBlack, "bottom", {
+      duration: 2.02,
+      each: 0.09,
+      ease: "elastic.out(0.78, 0.5)"
+    }), 0)
+    .add(tweenDynamicMorph(morphLayers[1], coverYellow, DYNAMIC_MORPH.coverYellow, "bottom", {
+      duration: 2.14,
+      each: 0.095,
+      ease: "elastic.out(0.82, 0.52)"
+    }), 0.16)
+    .add(tweenDynamicMorph(morphLayers[2], coverPaper, DYNAMIC_MORPH.coverPaper, "bottom", {
+      duration: 2.26,
+      each: 0.1,
+      ease: "elastic.out(0.86, 0.54)"
+    }), 0.32)
+    .to(morphLogo, { autoAlpha: 1, scale: 1, duration: 0.62, ease: "back.out(1.7)" }, 1.9)
+    .to(morphLayers, { duration: 0.82 }, ">-0.02");
 }
 
 document.addEventListener("click", (event) => {
@@ -1028,6 +1327,7 @@ homeSection?.addEventListener("wheel", (event) => {
 }, { passive: false });
 
 bootHomeAnimations();
+bootHowPageAnimations();
 bootIntroCards();
 playPageEnter();
 
