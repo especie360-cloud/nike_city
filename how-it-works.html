@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>How It Works | Nike City</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="top-nav" aria-label="Navegación principal">
+      <a class="site-logo" href="index.html" data-page-transition aria-label="Nike City home">
+        <span class="logo-image" aria-hidden="true"></span>
+      </a>
+      <nav>
+        <a class="active" href="how-it-works.html" data-page-transition>How it works</a>
+        <a href="nike-city.html" data-page-transition>Nike City</a>
+        <a href="#contact">Contact</a>
+      </nav>
+      <div class="nav-actions">
+        <button class="sound-toggle" type="button">Sound on <span>◕</span></button>
+        <button class="menu-toggle" type="button" aria-label="Abrir menú"><span></span><span></span><span></span></button>
+      </div>
+    </header>
+
+    <main>
+      <section class="coming-screen" id="how" aria-label="How it works coming soon">
+        <div>
+          <span>How it works</span>
+          <h2>Coming soon</h2>
+          <p>We are preparing the guided flow for exploring Nike City districts, rewards and movement paths.</p>
+          <a class="cta secondary" href="index.html" data-page-transition>Back Home <b>→</b></a>
+        </div>
+      </section>
+    </main>
+
+    <nav class="bottom-menu" aria-label="Navegación inferior">
+      <a href="index.html" data-page-transition><i>⌂</i>Home</a>
+      <a href="nike-city.html" data-page-transition><i>▦</i>Districts</a>
+      <a href="#collections"><i>◒</i>Collections</a>
+      <a href="#categories"><i>◉</i>Categories</a>
+      <a href="#profile"><i>♙</i>Profile</a>
+    </nav>
+
+    <aside class="movement-card">
+      <span class="globe">◒</span>
+      <strong>A city built<br>for movement.</strong>
+      <i></i>
+    </aside>
+
+    <div class="transition-wipe" aria-hidden="true">
+      <span class="wipe-panel wipe-white"></span>
+      <span class="wipe-panel wipe-yellow"></span>
+      <span class="wipe-panel wipe-black"></span>
+      <span class="wipe-panel wipe-final"></span>
+      <span class="wipe-cover"></span>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/animejs@3.2.2/lib/anime.min.js"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+        }
+      }
+    </script>
+    <script type="module" src="script.js"></script>
+  </body>
+</html>

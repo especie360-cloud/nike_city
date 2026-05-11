@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Nike City GLB Viewer</title>
+    <style>
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: #f7f6f1;
+      }
+
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="viewer"></canvas>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+        }
+      }
+    </script>
+    <script type="module">
+      import * as THREE from "three";
+      import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+      import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+
+      const canvas = document.querySelector("#viewer");
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.shadowMap.enabled = true;
+
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0xf7f6f1);
+
+      const camera = new THREE.OrthographicCamera(-10, 10, 7, -7, 0.1, 100);
+      camera.position.set(10.5, 11.5, 10.5);
+      camera.lookAt(0, 0, 0);
+
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.target.set(0, 0.2, 1);
+      controls.minZoom = 0.65;
+      controls.maxZoom = 2.2;
+
+      scene.add(new THREE.HemisphereLight(0xffffff, 0xd8d1c4, 2.4));
+      const sun = new THREE.DirectionalLight(0xffffff, 3.0);
+      sun.position.set(8, 16, 6);
+      sun.castShadow = true;
+      scene.add(sun);
+
+      new GLTFLoader().load("assets/nike-city-isometric.glb", (gltf) => {
+        scene.add(gltf.scene);
+      });
+
+      function resize() {
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        renderer.setSize(w, h, false);
+        const aspect = w / h;
+        const frustum = w < 900 ? 10.5 : 7.5;
+        camera.left = -frustum * aspect;
+        camera.right = frustum * aspect;
+        camera.top = frustum;
+        camera.bottom = -frustum;
+        camera.updateProjectionMatrix();
+      }
+
+      window.addEventListener("resize", resize);
+      resize();
+
+      function animate() {
+        controls.update();
+        renderer.render(scene, camera);
+        requestAnimationFrame(animate);
+      }
+
+      animate();
+    </script>
+  </body>
+</html>

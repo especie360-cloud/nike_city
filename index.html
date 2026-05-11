@@ -10,69 +10,131 @@
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
-    <main class="city-app">
-      <canvas id="city"></canvas>
+    <header class="top-nav" aria-label="Navegación principal">
+      <a class="site-logo" href="index.html" data-page-transition aria-label="Nike City home">
+        <span class="logo-image" aria-hidden="true"></span>
+      </a>
+      <nav>
+        <a href="how-it-works.html" data-page-transition>How it works</a>
+        <a href="nike-city.html" data-page-transition>Nike City</a>
+        <a href="#contact">Contact</a>
+      </nav>
+      <div class="nav-actions">
+        <button class="sound-toggle" type="button">Sound on <span>◕</span></button>
+        <button class="menu-toggle" type="button" aria-label="Abrir menú"><span></span><span></span><span></span></button>
+      </div>
+    </header>
 
-      <section class="brand-panel" aria-label="Nike City">
-        <div class="brand-row">
-          <h1>NIKE CITY</h1>
-          <span class="swoosh"></span>
+    <main>
+      <section class="hero" id="home" aria-label="Nike City home">
+        <div class="hero-copy">
+          <h1>
+            <span>Explore</span>
+            <span>the city</span>
+            <span>of movement</span>
+          </h1>
+          <div class="hero-dots" aria-hidden="true"><span></span><span></span><span></span></div>
+          <p>Navigate interactive districts, discover collections, explore categories and experience Nike through a futuristic modular city.</p>
+          <div class="hero-ctas">
+            <a class="cta primary" href="nike-city.html" data-page-transition>Enter Nike City <b>→</b></a>
+            <a class="cta secondary" href="#districts">Explore Districts <b>→</b></a>
+          </div>
         </div>
-        <p>BIENVENIDO A LA CIUDAD<br>DEL MOVIMIENTO</p>
-        <div class="quick-icons" aria-hidden="true">
-          <span>⌁</span>
-          <span>●</span>
-          <span>◉</span>
-          <span>☺</span>
-          <span>◒</span>
+
+        <div class="hero-visual" aria-label="Nike City featured object">
+          <span class="cloud cloud-a"></span>
+          <span class="cloud cloud-b"></span>
+          <span class="spark spark-a">＋</span>
+          <span class="spark spark-b">＋</span>
+          <span class="spark spark-c">＋</span>
+          <span class="plane plane-a">✈</span>
+          <div class="floating-shoe">
+            <span class="shoe-body"></span>
+            <span class="shoe-sole"></span>
+            <span class="shoe-swoosh"></span>
+            <span class="shoe-laces"></span>
+          </div>
+          <div class="hero-island">
+            <span class="hero-tree tree-a"></span>
+            <span class="hero-tree tree-b"></span>
+            <span class="hero-lamp lamp-a"></span>
+            <span class="hero-lamp lamp-b"></span>
+            <span class="person person-a"></span>
+            <span class="person person-b"></span>
+            <span class="person person-c"></span>
+            <span class="hero-bench"></span>
+            <div class="shoe-box">
+              <span class="box-band"></span>
+              <span class="box-logo">NIKE</span>
+            </div>
+          </div>
         </div>
-      </section>
 
-      <div class="labels" id="labels" aria-live="polite"></div>
-
-      <section class="bottom-panels" aria-label="Leyenda y coordenadas">
-        <article class="panel legend">
-          <h2>LEYENDA</h2>
-          <div class="legend-grid">
-            <span><i>⌁</i> Zona running</span>
-            <span><i>●</i> Zona soccer</span>
-            <span><i>◉</i> Zona basketball</span>
-            <span><i>☺</i> Zona juvenil</span>
-            <span><i>◒</i> Zona casual</span>
-            <span><i>◓</i> Tienda Nike</span>
-            <span><i>▣</i> Plaza central</span>
-            <span><i>P</i> Estacionamiento</span>
-            <span><i>M</i> Estación metro</span>
-            <span><i>◆</i> Skate park</span>
-            <span><i>☕</i> Cafetería</span>
-            <span><i>✎</i> Arte & cultura</span>
-          </div>
-        </article>
-        <article class="panel coords">
-          <h2>COORDENADAS DE ZONAS</h2>
-          <div>
-            <span>Zona Running <b>B2 - E5</b></span>
-            <span>Zona Soccer <b>I2 - L4</b></span>
-            <span>Zona Basketball <b>L3 - O6</b></span>
-            <span>Zona Juvenil <b>B7 - E10</b></span>
-            <span>Zona Casual <b>L8 - O11</b></span>
-            <span>Plaza Central <b>F7 - J10</b></span>
-            <span>Estación Metro <b>H12 - J14</b></span>
-            <span>Skate Park <b>B12 - E14</b></span>
-            <span>Estacionamiento <b>L12 - O14</b></span>
-          </div>
-        </article>
-        <article class="panel guide">
-          <h2>GUÍA DE COORDENADAS</h2>
-          <div class="axis">
-            <span>FILAS (A - O)</span>
-            <em></em>
-            <b>COLUMNAS (1 - 15)</b>
-          </div>
-        </article>
       </section>
     </main>
 
+    <nav class="bottom-menu" aria-label="Navegación inferior">
+      <a class="active" href="index.html" data-page-transition><i>⌂</i>Home</a>
+      <a href="nike-city.html" data-page-transition><i>▦</i>Districts</a>
+      <a href="#collections"><i>◒</i>Collections</a>
+      <a href="#categories"><i>◉</i>Categories</a>
+      <a href="#profile"><i>♙</i>Profile</a>
+    </nav>
+
+    <aside class="movement-card">
+      <span class="globe">◒</span>
+      <strong>A city built<br>for movement.</strong>
+      <i></i>
+    </aside>
+
+    <section class="cards-gate" aria-label="Nike City introduction cards">
+      <div class="intro-card-stack">
+        <article class="intro-card" data-card="0">
+          <span class="intro-number">01</span>
+          <h2>Explore districts</h2>
+          <i></i>
+          <p>Discover unique districts across Nike City. Each one is built for a different sport, lifestyle and way to move.</p>
+          <div class="mini-districts" aria-hidden="true">
+            <span>Soccer</span>
+            <span>Running</span>
+            <span>Basketball</span>
+            <span>Youth</span>
+            <span>Casual</span>
+            <span>Skate</span>
+          </div>
+        </article>
+        <article class="intro-card" data-card="1">
+          <span class="intro-number">02</span>
+          <h2>Unlock movement</h2>
+          <i></i>
+          <p>Move through the city, open zones and follow interactive paths that connect products, challenges and moments.</p>
+          <div class="mini-route" aria-hidden="true">
+            <span></span><span></span><span></span><span></span>
+          </div>
+        </article>
+        <article class="intro-card" data-card="2">
+          <span class="intro-number">03</span>
+          <h2>Enter the city</h2>
+          <i></i>
+          <p>When you are ready, jump into the full 3D city. Rotate, zoom and explore every modular district at your pace.</p>
+          <div class="mini-city" aria-hidden="true">
+            <span></span><span></span><span></span><span></span>
+          </div>
+        </article>
+      </div>
+      <button class="intro-next" type="button" aria-label="Siguiente card">→</button>
+      <button class="skip-cards" type="button">Skip cards</button>
+    </section>
+
+    <div class="transition-wipe" aria-hidden="true">
+      <span class="wipe-panel wipe-white"></span>
+      <span class="wipe-panel wipe-yellow"></span>
+      <span class="wipe-panel wipe-black"></span>
+      <span class="wipe-panel wipe-final"></span>
+      <span class="wipe-cover"></span>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/animejs@3.2.2/lib/anime.min.js"></script>
     <script type="importmap">
       {
         "imports": {

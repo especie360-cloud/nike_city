@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Nike City | Interactive Map</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="top-nav" aria-label="Navegación principal">
+      <a class="site-logo" href="index.html" data-page-transition aria-label="Nike City home">
+        <span class="logo-image" aria-hidden="true"></span>
+      </a>
+      <nav>
+        <a href="how-it-works.html" data-page-transition>How it works</a>
+        <a class="active" href="nike-city.html" data-page-transition>Nike City</a>
+        <a href="#contact">Contact</a>
+      </nav>
+      <div class="nav-actions">
+        <button class="sound-toggle" type="button">Sound on <span>◕</span></button>
+        <button class="menu-toggle" type="button" aria-label="Abrir menú"><span></span><span></span><span></span></button>
+      </div>
+    </header>
+
+    <main>
+      <section class="city-app" id="city-section" aria-label="Nike City interactive map">
+        <canvas id="city"></canvas>
+        <section class="brand-panel" aria-label="Nike City">
+          <div class="brand-row">
+            <h1>NIKE CITY</h1>
+            <span class="swoosh"></span>
+          </div>
+          <p>BIENVENIDO A LA CIUDAD<br>DEL MOVIMIENTO</p>
+          <div class="quick-icons" aria-hidden="true">
+            <span>⌁</span>
+            <span>●</span>
+            <span>◉</span>
+            <span>☺</span>
+            <span>◒</span>
+          </div>
+        </section>
+
+        <div class="labels" id="labels" aria-live="polite"></div>
+      </section>
+    </main>
+
+    <nav class="bottom-menu" aria-label="Navegación inferior">
+      <a href="index.html" data-page-transition><i>⌂</i>Home</a>
+      <a class="active" href="nike-city.html" data-page-transition><i>▦</i>Districts</a>
+      <a href="#collections"><i>◒</i>Collections</a>
+      <a href="#categories"><i>◉</i>Categories</a>
+      <a href="#profile"><i>♙</i>Profile</a>
+    </nav>
+
+    <aside class="movement-card">
+      <span class="globe">◒</span>
+      <strong>A city built<br>for movement.</strong>
+      <i></i>
+    </aside>
+
+    <div class="transition-wipe" aria-hidden="true">
+      <span class="wipe-panel wipe-white"></span>
+      <span class="wipe-panel wipe-yellow"></span>
+      <span class="wipe-panel wipe-black"></span>
+      <span class="wipe-panel wipe-final"></span>
+      <span class="wipe-cover"></span>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/animejs@3.2.2/lib/anime.min.js"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+        }
+      }
+    </script>
+    <script type="module" src="script.js"></script>
+  </body>
+</html>

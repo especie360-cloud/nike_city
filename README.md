@@ -2,6 +2,12 @@
 
 Interactive isometric 3D city prototype built with HTML, CSS, and Three.js.
 
+## Model asset
+
+- Web model: `assets/nike-city-isometric.glb`
+- Standalone viewer: `model-viewer.html`
+- Generator: `scripts/export-nike-city-model.mjs`
+
 ## Run locally
 
 Serve the folder with any static server, for example:
