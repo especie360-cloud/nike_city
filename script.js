@@ -45,7 +45,7 @@ const SKATE_GLB = "assets/models/zones/zona_skate.glb?v=1";
 const GENERIC_ZONE_GLB = "assets/models/zones/zona_generica.glb?v=1";
 const PROP_ASSET_BASE = "assets/models/props/";
 const SHOW_CITY_ROADS = false;
-const SHOW_LAYOUT_ISLANDS = false;
+const SHOW_LAYOUT_ISLANDS = true;
 const SHOW_CITY_ATMOSPHERE = true;
 const MORPH_PATHS = {
   below: "M0 126 C16 113 32 141 50 126 C68 111 84 141 100 126 L100 176 C82 164 68 182 50 168 C32 154 18 182 0 168 Z",
@@ -184,6 +184,7 @@ const zoneLabelOffsets = new Map();
 let activeZoneGroup = null;
 const LAYOUT_SNAP = 0.25;
 const ROAD_MAGNET_SNAP = 0.18;
+const ZONE_MAGNET_SNAP = 0.32;
 const TECH_GRID_SIZE = 44;
 const TECH_GRID_DIVISIONS = 176;
 const ISLAND_TYPES = {
@@ -199,6 +200,10 @@ const ASSET_TYPES = {
   carWhiteBlack: { label: "Auto blanco/negro", category: "Vehicles / Ground", url: `${PROP_ASSET_BASE}car_white_black.glb`, scale: 0.7, y: 0.18, placement: "road" },
   planeOrange: { label: "Avión naranja", category: "Vehicles / Air", url: `${PROP_ASSET_BASE}plane_orange.glb`, scale: 0.85, y: 3.2, placement: "air", animated: true },
   helicopterOrange: { label: "Helicóptero naranja", category: "Vehicles / Air", url: `${PROP_ASSET_BASE}helicopter_orange.glb`, scale: 0.85, y: 2.9, placement: "air", animated: true },
+  cloudSmall: { label: "Nube chica", category: "Sky", kind: "cloud", scale: 0.7, y: 3.4, placement: "air" },
+  cloudMedium: { label: "Nube mediana", category: "Sky", kind: "cloud", scale: 1, y: 3.8, placement: "air" },
+  cloudLarge: { label: "Nube grande", category: "Sky", kind: "cloud", scale: 1.35, y: 4.2, placement: "air" },
+  cloudWide: { label: "Nube amplia", category: "Sky", kind: "cloud", scale: 1.15, y: 4, placement: "air", scaleX: 1.75, scaleZ: 0.85 },
   personBlock: { label: "Persona quieta", category: "People", url: `${PROP_ASSET_BASE}person_block.glb`, scale: 0.58, y: 0.18, placement: "pedestrian" },
   personWalking: { label: "Persona caminando", category: "People", url: `${PROP_ASSET_BASE}person_walking.glb`, scale: 0.58, y: 0.18, placement: "pedestrian", animated: true },
   treeYellow: { label: "Árbol amarillo", category: "Urban Props", url: `${PROP_ASSET_BASE}prop_tree_yellow.glb`, scale: 0.82, y: 0.16, placement: "decor" },
@@ -380,7 +385,7 @@ function restoreEditorSnapshot(snapshotText) {
     const snapshot = JSON.parse(snapshotText);
     window.localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(snapshot.layout));
     window.localStorage.setItem(ROAD_STORAGE_KEY, JSON.stringify(snapshot.roads));
-    window.location.href = `${window.location.pathname}?v=road-editor-09`;
+    window.location.href = `${window.location.pathname}?v=road-editor-15`;
   } catch {
     // If a snapshot is corrupted, keep the current editor state.
   }
@@ -436,7 +441,7 @@ function refreshLayoutState() {
   } catch {
     // Nothing else to do; reload still restores the code defaults.
   }
-  window.location.href = `${window.location.pathname}?v=road-editor-09`;
+  window.location.href = `${window.location.pathname}?v=road-editor-15`;
 }
 
 function addSceneObject(object) {
@@ -470,6 +475,11 @@ function setZoneRotation(id, degrees) {
   const helper = zoneBaseHelpers.get(id);
   if (helper) {
     helper.rotation.y = THREE.MathUtils.degToRad(degrees);
+  }
+  const position = zonePositionValues.get(id);
+  if (position) {
+    const snapped = snapZonePosition(position.x, position.z, id);
+    setZonePosition(id, snapped.x, snapped.z);
   }
   saveLayoutState();
 }
@@ -507,22 +517,86 @@ function snapToLayoutGrid(value) {
   return Math.round(value / LAYOUT_SNAP) * LAYOUT_SNAP;
 }
 
+function snapAxisByFootprint(value, size) {
+  const half = size / 2;
+  const candidates = [
+    snapToLayoutGrid(value),
+    value + (snapToLayoutGrid(value - half) - (value - half)),
+    value + (snapToLayoutGrid(value + half) - (value + half))
+  ];
+  return candidates.reduce((best, candidate) => {
+    return Math.abs(candidate - value) < Math.abs(best - value) ? candidate : best;
+  }, candidates[0]);
+}
+
+function getRotatedFootprint(w, d, rotation = 0) {
+  const radians = THREE.MathUtils.degToRad(rotation);
+  const cos = Math.abs(Math.cos(radians));
+  const sin = Math.abs(Math.sin(radians));
+  return {
+    w: (w * cos) + (d * sin),
+    d: (w * sin) + (d * cos)
+  };
+}
+
+function snapPositionByFootprint(x, z, footprint) {
+  return {
+    x: Number(snapAxisByFootprint(x, footprint.w).toFixed(2)),
+    z: Number(snapAxisByFootprint(z, footprint.d).toFixed(2))
+  };
+}
+
+function getRotatedRectAnchors(w, d, rotation = 0) {
+  const radians = THREE.MathUtils.degToRad(rotation);
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  const points = [
+    [0, 0],
+    [-w / 2, -d / 2],
+    [w / 2, -d / 2],
+    [w / 2, d / 2],
+    [-w / 2, d / 2],
+    [0, -d / 2],
+    [w / 2, 0],
+    [0, d / 2],
+    [-w / 2, 0]
+  ];
+  return points.map(([px, pz]) => ({
+    x: (px * cos) - (pz * sin),
+    z: (px * sin) + (pz * cos)
+  }));
+}
+
+function snapAxisByAnchors(value, anchors, axis) {
+  const deltas = anchors.map((anchor) => {
+    const anchorValue = value + anchor[axis];
+    return snapToLayoutGrid(anchorValue) - anchorValue;
+  });
+  const bestDelta = deltas.reduce((best, delta) => {
+    return Math.abs(delta) < Math.abs(best) ? delta : best;
+  }, deltas[0] ?? 0);
+  return Number((value + bestDelta).toFixed(2));
+}
+
+function snapPositionByRotatedRect(x, z, w, d, rotation = 0) {
+  const anchors = getRotatedRectAnchors(w, d, rotation);
+  return {
+    x: snapAxisByAnchors(x, anchors, "x"),
+    z: snapAxisByAnchors(z, anchors, "z")
+  };
+}
+
 function getRoadFootprint(road) {
   const type = ROAD_TYPES[road?.type];
   if (!type) return { w: 1, d: 1 };
-  let w = type.w * (road.scaleX ?? 1);
-  let d = type.d * (road.scaleZ ?? 1);
-  const normalized = Math.abs((((road.rotation ?? 0) % 180) + 180) % 180);
-  const isQuarterTurn = Math.abs(normalized - 90) < 16;
-  if (isQuarterTurn) {
-    [w, d] = [d, w];
-  }
-  return { w, d };
+  const w = type.w * (road.scaleX ?? 1);
+  const d = type.d * (road.scaleZ ?? 1);
+  return getRotatedFootprint(w, d, road.rotation ?? 0);
 }
 
 function snapRoadAxis(value, axis, currentRoad) {
   const currentSize = getRoadFootprint(currentRoad)[axis === "x" ? "w" : "d"];
-  let best = snapToLayoutGrid(value);
+  let best = snapAxisByFootprint(value, currentSize);
   let bestDistance = ROAD_MAGNET_SNAP;
   layoutRoads.forEach((road) => {
     if (!road || road.id === currentRoad.id) return;
@@ -554,6 +628,85 @@ function snapRoadPosition(x, z, roadId = null, typeId = null) {
     x: snapRoadAxis(x, "x", road),
     z: snapRoadAxis(z, "z", road)
   };
+}
+
+function getZoneFootprint(id) {
+  const values = zoneBaseValues.get(id) || ZONE_BASE_DEFAULTS[id] || { w: 1, d: 1 };
+  const rotation = zoneRotationValues.get(id) ?? 0;
+  return getRotatedFootprint(values.w, values.d, rotation);
+}
+
+function snapZoneToGridByAnchors(x, z, zoneId) {
+  const values = zoneBaseValues.get(zoneId) || ZONE_BASE_DEFAULTS[zoneId] || { w: 1, d: 1 };
+  return snapPositionByRotatedRect(x, z, values.w, values.d, zoneRotationValues.get(zoneId) ?? 0);
+}
+
+function snapZoneAxis(value, axis, currentZoneId) {
+  const currentSize = getZoneFootprint(currentZoneId)[axis === "x" ? "w" : "d"];
+  let best = value;
+  let bestDistance = ZONE_MAGNET_SNAP;
+  zonePositionValues.forEach((position, id) => {
+    if (id === currentZoneId) return;
+    const otherSize = getZoneFootprint(id)[axis === "x" ? "w" : "d"];
+    const otherCenter = axis === "x" ? position.x : position.z;
+    const min = otherCenter - otherSize / 2;
+    const max = otherCenter + otherSize / 2;
+    const candidates = [
+      otherCenter,
+      min + currentSize / 2,
+      max - currentSize / 2,
+      min - currentSize / 2,
+      max + currentSize / 2
+    ];
+    candidates.forEach((candidate) => {
+      const distance = Math.abs(value - candidate);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = candidate;
+      }
+    });
+  });
+  return Number(best.toFixed(2));
+}
+
+function snapZonePosition(x, z, zoneId) {
+  const gridSnapped = snapZoneToGridByAnchors(x, z, zoneId);
+  return {
+    x: snapZoneAxis(gridSnapped.x, "x", zoneId),
+    z: snapZoneAxis(gridSnapped.z, "z", zoneId)
+  };
+}
+
+function getIslandFootprint(island) {
+  return getRotatedFootprint(island.w ?? 1, island.d ?? 1, island.rotation ?? 0);
+}
+
+function snapIslandPosition(x, z, island) {
+  return snapPositionByFootprint(x, z, getIslandFootprint(island));
+}
+
+function getAssetBaseFootprint(typeId) {
+  const type = ASSET_TYPES[typeId];
+  if (!type) return { w: 1, d: 1 };
+  if (typeId === "genericZone") return { w: 2.8, d: 2 };
+  if (type.kind === "cloud") return { w: 1.45, d: 0.72 };
+  if (type.placement === "road") return { w: 1.05, d: 0.58 };
+  if (type.placement === "air") return { w: 1.3, d: 0.9 };
+  if (type.placement === "pedestrian") return { w: 0.42, d: 0.42 };
+  return { w: 0.72, d: 0.72 };
+}
+
+function getAssetFootprint(asset) {
+  const base = getAssetBaseFootprint(asset.type);
+  return getRotatedFootprint(
+    base.w * (asset.scaleX ?? asset.scale ?? 1),
+    base.d * (asset.scaleZ ?? asset.scale ?? 1),
+    asset.rotation ?? 0
+  );
+}
+
+function snapAssetPosition(x, z, asset) {
+  return snapPositionByFootprint(x, z, getAssetFootprint(asset));
 }
 
 function buildRotatableZone(id, x, z, buildFn) {
@@ -735,6 +888,26 @@ function addCloud(parent, x, y, z, scale = 1, speed = 0.003) {
   return group;
 }
 
+function buildCloudAsset() {
+  const group = new THREE.Group();
+  group.name = "asset_cloud";
+  const parts = [
+    [-0.42, -0.02, 0, 0.3],
+    [-0.12, 0.08, 0.02, 0.4],
+    [0.28, 0.04, -0.02, 0.34],
+    [0.54, -0.04, 0.02, 0.24]
+  ];
+  parts.forEach(([px, py, pz, radius]) => {
+    const puff = new THREE.Mesh(new THREE.SphereGeometry(radius, 20, 12), mats.white);
+    puff.position.set(px, py, pz);
+    puff.scale.y = 0.62;
+    puff.castShadow = false;
+    puff.receiveShadow = false;
+    group.add(puff);
+  });
+  return group;
+}
+
 function addBird(parent, x, y, z, scale = 1, speed = 0.006) {
   const group = new THREE.Group();
   group.position.set(x, y, z);
@@ -812,7 +985,7 @@ function updateCityAtmosphere(time) {
 
 function addSmallIsland(parent, x, z, w, d, rot = 0, radius = 0.28) {
   const island = roundedSlab(w, d, 0.075, mats.layoutIsland, radius);
-  island.position.set(x, 0.06, z);
+  island.position.set(x, 0.13, z);
   island.rotation.y = rot;
   island.name = "small_white_island";
   parent.add(island);
@@ -870,6 +1043,11 @@ function updateLayoutIsland(id, updates, persist = true) {
   const mesh = getIslandMesh(id);
   if (!island || !mesh) return;
   Object.assign(island, updates);
+  if ("rotation" in updates || "w" in updates || "d" in updates) {
+    const snapped = snapIslandPosition(island.x, island.z, island);
+    island.x = snapped.x;
+    island.z = snapped.z;
+  }
   mesh.position.x = island.x;
   mesh.position.z = island.z;
   mesh.rotation.y = THREE.MathUtils.degToRad(island.rotation);
@@ -910,12 +1088,36 @@ function createLayoutAsset(typeId, x, z, options = {}) {
     z: Number(z.toFixed(2)),
     rotation: options.rotation ?? 0,
     scale: options.scale ?? type.scale,
-    scaleX: options.scaleX ?? options.scale ?? type.scale,
-    scaleZ: options.scaleZ ?? options.scale ?? type.scale,
+    scaleX: options.scaleX ?? type.scaleX ?? options.scale ?? type.scale,
+    scaleZ: options.scaleZ ?? type.scaleZ ?? options.scale ?? type.scale,
     y: options.y ?? type.y ?? 0.18,
     flip: options.flip ?? 1
   };
+  const snappedAssetPosition = snapAssetPosition(assetData.x, assetData.z, assetData);
+  assetData.x = snappedAssetPosition.x;
+  assetData.z = snappedAssetPosition.z;
   layoutAssets.push(assetData);
+
+  if (type.kind === "cloud") {
+    const asset = buildCloudAsset();
+    asset.position.set(assetData.x, assetData.y, assetData.z);
+    asset.rotation.y = THREE.MathUtils.degToRad(assetData.rotation);
+    asset.scale.set(assetData.scaleX * assetData.flip, assetData.scale, assetData.scaleZ);
+    asset.userData.layoutAssetId = id;
+    asset.traverse((child) => {
+      child.userData.layoutAssetId = id;
+      if (!child.isMesh) return;
+      child.castShadow = false;
+      child.receiveShadow = false;
+    });
+    layoutAssetGroup.add(asset);
+    if (options.select !== false) selectLayoutAsset(id);
+    if (options.select !== false) selectedAssetId = id;
+    if (options.persist !== false) saveLayoutState();
+    updateAssetLayoutPanel();
+    updateAssetEditorPanel();
+    return assetData;
+  }
 
   const loader = new GLTFLoader();
   loader.load(type.url, (gltf) => {
@@ -971,6 +1173,11 @@ function updateLayoutAsset(id, updates, persist = true) {
   const object = getAssetObject(id);
   if (!asset) return;
   Object.assign(asset, updates);
+  if ("rotation" in updates || "scale" in updates || "scaleX" in updates || "scaleZ" in updates) {
+    const snapped = snapAssetPosition(asset.x, asset.z, asset);
+    asset.x = snapped.x;
+    asset.z = snapped.z;
+  }
   if (object) {
     object.position.x = asset.x;
     object.position.y = asset.y ?? ASSET_TYPES[asset.type]?.y ?? 0.18;
@@ -1195,6 +1402,11 @@ function updateLayoutRoad(id, updates, persist = true) {
   const object = getRoadObject(id);
   if (!road) return;
   Object.assign(road, updates);
+  if ("rotation" in updates || "scaleX" in updates || "scaleZ" in updates) {
+    const snapped = snapRoadPosition(road.x, road.z, id);
+    road.x = snapped.x;
+    road.z = snapped.z;
+  }
   if (object) {
     object.position.set(road.x, 0, road.z);
     object.rotation.y = THREE.MathUtils.degToRad(road.rotation);
@@ -1222,7 +1434,7 @@ function createZoneBaseHelper(id, x, z) {
   const defaults = ZONE_BASE_DEFAULTS[id];
   if (!defaults || !layoutIslandGroup) return null;
   const helper = platformHelper(defaults.w, defaults.d, 0.22);
-  helper.position.set(x, -0.04, z);
+  helper.position.set(x, 0.09, z);
   helper.name = `zone_base_helper_${id}`;
   helper.userData.baseW = defaults.w;
   helper.userData.baseD = defaults.d;
@@ -1243,6 +1455,11 @@ function setZoneBaseSize(id, w, d, persist = true) {
   zoneBaseValues.set(id, values);
   helper.scale.x = values.w / helper.userData.baseW;
   helper.scale.z = values.d / helper.userData.baseD;
+  const position = zonePositionValues.get(id);
+  if (position) {
+    const snapped = snapZonePosition(position.x, position.z, id);
+    setZonePosition(id, snapped.x, snapped.z);
+  }
   updateZoneBasePanel(id);
   if (persist) saveLayoutState();
 }
@@ -1373,7 +1590,7 @@ function setupZoneRotationPanel() {
         <label>Escala <input type="range" min="0.35" max="2.8" step="0.05" data-asset-edit="scale"><output data-asset-output="scale">0</output></label>
         <label>Largo <input type="range" min="0.2" max="4.5" step="0.05" data-asset-edit="scaleX"><output data-asset-output="scaleX">0</output></label>
         <label>Ancho <input type="range" min="0.2" max="4.5" step="0.05" data-asset-edit="scaleZ"><output data-asset-output="scaleZ">0</output></label>
-        <label>Altura <input type="range" min="0.1" max="4.2" step="0.05" data-asset-edit="y"><output data-asset-output="y">0</output></label>
+        <label>Altura <input type="range" min="0.1" max="10" step="0.05" data-asset-edit="y"><output data-asset-output="y">0</output></label>
         <label>Giro <input type="range" min="-180" max="180" step="1" data-asset-edit="rotation"><output data-asset-output="rotation">0°</output></label>
         <label>Flip <input type="range" min="-1" max="1" step="2" data-asset-edit="flip"><output data-asset-output="flip">Normal</output></label>
         <button class="duplicate-asset" type="button">Duplicar asset</button>
@@ -2608,7 +2825,13 @@ function findZoneIdFromObject(object) {
 
 function getZoneHit(event) {
   updatePointerFromEvent(event);
-  const roots = Array.from(zoneRotatables.values());
+  const roots = [
+    ...Array.from(zoneRotatables.values()),
+    ...Array.from(zoneBaseHelpers.entries()).map(([id, helper]) => {
+      helper.userData.zoneRootId = id;
+      return helper;
+    })
+  ];
   if (!roots.length) return null;
   const hits = raycaster.intersectObjects(roots, true);
   const hit = hits.find((item) => findZoneIdFromObject(item.object));
@@ -2737,20 +2960,6 @@ function startZoneDrag(event) {
     }
     return;
   }
-  const roadHit = getRoadHit(event);
-  if (roadHit?.object) {
-    captureEditorHistory();
-    draggedRoadId = roadHit.id;
-    didDragZone = false;
-    selectLayoutRoad(roadHit.id);
-    event.preventDefault();
-    event.stopPropagation();
-    const point = getLayoutPlanePoint(event) || roadHit.point;
-    dragOffset.set(roadHit.object.position.x - point.x, 0, roadHit.object.position.z - point.z);
-    if (controls) controls.enabled = false;
-    canvas.setPointerCapture?.(event.pointerId);
-    return;
-  }
   const assetHit = getAssetHit(event);
   if (assetHit?.object) {
     captureEditorHistory();
@@ -2789,6 +2998,20 @@ function startZoneDrag(event) {
     event.stopPropagation();
     const point = getLayoutPlanePoint(event) || hit.point;
     dragOffset.set(hit.root.position.x - point.x, 0, hit.root.position.z - point.z);
+    if (controls) controls.enabled = false;
+    canvas.setPointerCapture?.(event.pointerId);
+    return;
+  }
+  const roadHit = getRoadHit(event);
+  if (roadHit?.object) {
+    captureEditorHistory();
+    draggedRoadId = roadHit.id;
+    didDragZone = false;
+    selectLayoutRoad(roadHit.id);
+    event.preventDefault();
+    event.stopPropagation();
+    const point = getLayoutPlanePoint(event) || roadHit.point;
+    dragOffset.set(roadHit.object.position.x - point.x, 0, roadHit.object.position.z - point.z);
     if (controls) controls.enabled = false;
     canvas.setPointerCapture?.(event.pointerId);
     return;
@@ -2833,8 +3056,7 @@ function moveZoneDrag(event) {
     const island = getIslandData(draggedIslandId);
     if (island) {
       updateLayoutIsland(draggedIslandId, {
-        x: snapToLayoutGrid(point.x + dragOffset.x),
-        z: snapToLayoutGrid(point.z + dragOffset.z)
+        ...snapIslandPosition(point.x + dragOffset.x, point.z + dragOffset.z, island)
       });
     }
     didDragZone = true;
@@ -2848,8 +3070,7 @@ function moveZoneDrag(event) {
     const asset = getAssetData(draggedAssetId);
     if (asset) {
       updateLayoutAsset(draggedAssetId, {
-        x: snapToLayoutGrid(point.x + dragOffset.x),
-        z: snapToLayoutGrid(point.z + dragOffset.z)
+        ...snapAssetPosition(point.x + dragOffset.x, point.z + dragOffset.z, asset)
       });
     }
     didDragZone = true;
@@ -2876,9 +3097,8 @@ function moveZoneDrag(event) {
   if (!draggedZoneId) return;
   const point = getLayoutPlanePoint(event);
   if (!point) return;
-  const x = snapToLayoutGrid(point.x + dragOffset.x);
-  const z = snapToLayoutGrid(point.z + dragOffset.z);
-  setZonePosition(draggedZoneId, x, z);
+  const snapped = snapZonePosition(point.x + dragOffset.x, point.z + dragOffset.z, draggedZoneId);
+  setZonePosition(draggedZoneId, snapped.x, snapped.z);
   didDragZone = true;
   event.preventDefault();
   event.stopPropagation();
