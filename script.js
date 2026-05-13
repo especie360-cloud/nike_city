@@ -184,6 +184,8 @@ const zoneLabelOffsets = new Map();
 let activeZoneGroup = null;
 const LAYOUT_SNAP = 0.25;
 const ROAD_MAGNET_SNAP = 0.18;
+const TECH_GRID_SIZE = 44;
+const TECH_GRID_DIVISIONS = 176;
 const ISLAND_TYPES = {
   small: { label: "Isla S", w: 1.1, d: 0.82, rot: 0 },
   long: { label: "Isla larga", w: 1.85, d: 0.84, rot: 0 },
@@ -220,6 +222,7 @@ const ROAD_TYPES = {
   crosswalkWhite: { label: "Peatonal blanca", w: 1.15, d: 0.8 },
   crosswalkOrange: { label: "Peatonal naranja", w: 1.15, d: 0.8 },
   laneWhite: { label: "Linea blanca", w: 2.2, d: 0.16 },
+  laneWhiteLong: { label: "Linea blanca larga", w: 6.3, d: 0.16 },
   laneOrange: { label: "Linea naranja", w: 2.2, d: 0.16 }
 };
 const ZONE_BASE_DEFAULTS = {
@@ -275,6 +278,9 @@ let layoutIslandGroup = null;
 let layoutAssetGroup = null;
 let layoutRoadGroup = null;
 const layoutAssetMixers = new Map();
+const editorHistory = [];
+let hoveredAssetId = null;
+let hoverAssetHelper = null;
 let lastAnimationTime = 0;
 let selectedIslandType = null;
 let selectedIslandId = null;
@@ -356,6 +362,35 @@ function getLayoutState() {
   };
 }
 
+function getEditorSnapshot() {
+  return {
+    layout: getLayoutState(),
+    roads: getRoadState()
+  };
+}
+
+function captureEditorHistory() {
+  editorHistory.push(JSON.stringify(getEditorSnapshot()));
+  if (editorHistory.length > 60) editorHistory.shift();
+}
+
+function restoreEditorSnapshot(snapshotText) {
+  if (!snapshotText) return;
+  try {
+    const snapshot = JSON.parse(snapshotText);
+    window.localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(snapshot.layout));
+    window.localStorage.setItem(ROAD_STORAGE_KEY, JSON.stringify(snapshot.roads));
+    window.location.href = `${window.location.pathname}?v=road-editor-09`;
+  } catch {
+    // If a snapshot is corrupted, keep the current editor state.
+  }
+}
+
+function undoEditorChange() {
+  const snapshot = editorHistory.pop();
+  restoreEditorSnapshot(snapshot);
+}
+
 function saveLayoutState() {
   try {
     window.localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(getLayoutState()));
@@ -401,7 +436,7 @@ function refreshLayoutState() {
   } catch {
     // Nothing else to do; reload still restores the code defaults.
   }
-  window.location.href = `${window.location.pathname}?v=road-editor-08`;
+  window.location.href = `${window.location.pathname}?v=road-editor-09`;
 }
 
 function addSceneObject(object) {
@@ -787,6 +822,7 @@ function addSmallIsland(parent, x, z, w, d, rot = 0, radius = 0.28) {
 function createLayoutIsland(typeId, x, z, options = {}) {
   const type = ISLAND_TYPES[typeId];
   if (!type || !layoutIslandGroup) return null;
+  if (options.persist !== false) captureEditorHistory();
   const island = addSmallIsland(layoutIslandGroup, x, z, type.w, type.d, type.rot, 0.24);
   const id = options.id || `island_${++islandIdCounter}`;
   const numericId = Number(String(id).replace(/\D/g, ""));
@@ -846,6 +882,7 @@ function updateLayoutIsland(id, updates, persist = true) {
 
 function deleteSelectedIsland() {
   if (!selectedIslandId) return;
+  captureEditorHistory();
   const mesh = getIslandMesh(selectedIslandId);
   if (mesh) {
     layoutIslandGroup.remove(mesh);
@@ -862,6 +899,7 @@ function deleteSelectedIsland() {
 function createLayoutAsset(typeId, x, z, options = {}) {
   const type = ASSET_TYPES[typeId];
   if (!type || !layoutAssetGroup) return null;
+  if (options.persist !== false) captureEditorHistory();
   const id = options.id || `asset_${++assetIdCounter}`;
   const numericId = Number(String(id).replace(/\D/g, ""));
   if (Number.isFinite(numericId)) assetIdCounter = Math.max(assetIdCounter, numericId);
@@ -871,8 +909,9 @@ function createLayoutAsset(typeId, x, z, options = {}) {
     x: Number(x.toFixed(2)),
     z: Number(z.toFixed(2)),
     rotation: options.rotation ?? 0,
-    scale: options.scale ?? type.scale
-    ,
+    scale: options.scale ?? type.scale,
+    scaleX: options.scaleX ?? options.scale ?? type.scale,
+    scaleZ: options.scaleZ ?? options.scale ?? type.scale,
     y: options.y ?? type.y ?? 0.18,
     flip: options.flip ?? 1
   };
@@ -884,12 +923,12 @@ function createLayoutAsset(typeId, x, z, options = {}) {
     asset.name = `asset_${typeId}`;
     asset.position.set(assetData.x, assetData.y, assetData.z);
     asset.rotation.y = THREE.MathUtils.degToRad(assetData.rotation);
-    asset.scale.set(assetData.scale * assetData.flip, assetData.scale, assetData.scale);
+    asset.scale.set(assetData.scaleX * assetData.flip, assetData.scale, assetData.scaleZ);
     asset.userData.layoutAssetId = id;
     asset.traverse((child) => {
       child.userData.layoutAssetId = id;
       if (!child.isMesh) return;
-      child.castShadow = true;
+      child.castShadow = type.placement !== "air";
       child.receiveShadow = true;
     });
     if (gltf.animations?.length) {
@@ -899,6 +938,8 @@ function createLayoutAsset(typeId, x, z, options = {}) {
     }
     layoutAssetGroup.add(asset);
     if (options.select !== false) selectLayoutAsset(id);
+  }, undefined, () => {
+    setAssetStatus(`${type.label}: no pudo cargar el GLB.`);
   });
 
   if (options.select !== false) selectedAssetId = id;
@@ -919,7 +960,9 @@ function getAssetObject(id) {
 function selectLayoutAsset(id) {
   selectedAssetId = id;
   selectedIslandId = null;
+  selectedRoadId = null;
   selectLayoutIsland(null);
+  setHoverAsset(id);
   updateAssetEditorPanel();
 }
 
@@ -933,7 +976,7 @@ function updateLayoutAsset(id, updates, persist = true) {
     object.position.y = asset.y ?? ASSET_TYPES[asset.type]?.y ?? 0.18;
     object.position.z = asset.z;
     object.rotation.y = THREE.MathUtils.degToRad(asset.rotation);
-    object.scale.set(asset.scale * (asset.flip ?? 1), asset.scale, asset.scale);
+    object.scale.set((asset.scaleX ?? asset.scale) * (asset.flip ?? 1), asset.scale, asset.scaleZ ?? asset.scale);
   }
   updateAssetEditorPanel();
   updateAssetLayoutPanel();
@@ -942,6 +985,7 @@ function updateLayoutAsset(id, updates, persist = true) {
 
 function deleteSelectedAsset() {
   if (!selectedAssetId) return;
+  captureEditorHistory();
   const object = getAssetObject(selectedAssetId);
   if (object) {
     layoutAssetGroup.remove(object);
@@ -959,9 +1003,12 @@ function duplicateSelectedAsset() {
   if (!selectedAssetId) return;
   const asset = getAssetData(selectedAssetId);
   if (!asset) return;
+  captureEditorHistory();
   createLayoutAsset(asset.type, snapToLayoutGrid(asset.x + 0.5), snapToLayoutGrid(asset.z + 0.5), {
     rotation: asset.rotation,
     scale: asset.scale,
+    scaleX: asset.scaleX,
+    scaleZ: asset.scaleZ,
     y: asset.y,
     flip: asset.flip,
     select: true
@@ -973,12 +1020,25 @@ function setAssetStatus(message) {
   if (status) status.textContent = message;
 }
 
+function setAssetCreationType(typeId) {
+  selectedAssetType = typeId;
+  selectedIslandType = null;
+  selectedRoadType = null;
+  document.querySelectorAll("[data-island-type]").forEach((item) => item.classList.remove("is-active"));
+  document.querySelectorAll("[data-road-type]").forEach((item) => item.classList.remove("is-active"));
+  document.querySelectorAll("[data-asset-type]").forEach((item) => {
+    item.classList.toggle("is-active", item.dataset.assetType === selectedAssetType);
+  });
+  setAssetStatus(selectedAssetType
+    ? `${ASSET_TYPES[selectedAssetType].label}: click en el mapa para colocar.`
+    : "Selecciona un asset y haz click en el mapa.");
+}
+
 function canPlaceAssetType(typeId, event) {
   const type = ASSET_TYPES[typeId];
   if (!type) return false;
   if (type.placement === "road" && !getRoadHit(event)) {
-    setAssetStatus(`${type.label}: colócalo sobre una calle.`);
-    return false;
+    setAssetStatus(`${type.label}: idealmente colócalo sobre una calle.`);
   }
   return true;
 }
@@ -992,6 +1052,34 @@ function createAssetFromEvent(typeId, event) {
     snapToLayoutGrid(point.x),
     snapToLayoutGrid(point.z)
   );
+}
+
+function setHoverAsset(id) {
+  if (!scene) return;
+  const object = id ? getAssetObject(id) : null;
+  hoveredAssetId = object ? id : null;
+  if (!object) {
+    if (hoverAssetHelper) hoverAssetHelper.visible = false;
+    return;
+  }
+  if (!hoverAssetHelper) {
+    hoverAssetHelper = new THREE.BoxHelper(object, 0xf7bd00);
+    hoverAssetHelper.name = "asset_hover_outline";
+    scene.add(hoverAssetHelper);
+  }
+  hoverAssetHelper.setFromObject(object);
+  hoverAssetHelper.visible = true;
+}
+
+function updateAssetHover(event) {
+  if (draggedAssetId || draggedIslandId || draggedRoadId || draggedZoneId || selectedAssetType || isScenePanning) return;
+  const hit = getAssetHit(event);
+  const nextId = hit?.id || null;
+  if (nextId !== hoveredAssetId) setHoverAsset(nextId);
+  if (hoverAssetHelper?.visible && nextId) {
+    const object = getAssetObject(nextId);
+    if (object) hoverAssetHelper.setFromObject(object);
+  }
 }
 
 function isRoadMarkingType(typeId) {
@@ -1026,9 +1114,13 @@ function buildRoadPiece(typeId) {
       stripe.position.set(x, 0.16, 0);
       group.add(stripe);
     });
-  } else if (typeId === "laneWhite" || typeId === "laneOrange") {
+  } else if (typeId === "laneWhite" || typeId === "laneWhiteLong" || typeId === "laneOrange") {
     const mat = typeId === "laneOrange" ? mats.roadOrange : mats.white;
-    [-0.76, -0.25, 0.26, 0.77].forEach((x) => {
+    const dashCount = Math.max(4, Math.round(type.w / 0.55));
+    const start = -type.w / 2 + 0.34;
+    const step = (type.w - 0.68) / Math.max(1, dashCount - 1);
+    Array.from({ length: dashCount }).forEach((_, index) => {
+      const x = start + step * index;
       const dash = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.016, type.d), mat);
       dash.position.set(x, 0.16, 0);
       group.add(dash);
@@ -1042,6 +1134,7 @@ function buildRoadPiece(typeId) {
 function createLayoutRoad(typeId, x, z, options = {}) {
   const type = ROAD_TYPES[typeId];
   if (!type || !layoutRoadGroup) return null;
+  if (options.persist !== false) captureEditorHistory();
   const id = options.id || `road_${++roadIdCounter}`;
   const numericId = Number(String(id).replace(/\D/g, ""));
   if (Number.isFinite(numericId)) roadIdCounter = Math.max(roadIdCounter, numericId);
@@ -1114,6 +1207,7 @@ function updateLayoutRoad(id, updates, persist = true) {
 
 function deleteSelectedRoad() {
   if (!selectedRoadId) return;
+  captureEditorHistory();
   const object = getRoadObject(selectedRoadId);
   if (object) layoutRoadGroup.remove(object);
   const index = layoutRoads.findIndex((road) => road.id === selectedRoadId);
@@ -1277,6 +1371,8 @@ function setupZoneRotationPanel() {
         <span class="tool-subtitle">Asset seleccionado</span>
         <small class="asset-editor-empty">Haz click en un asset para editarlo.</small>
         <label>Escala <input type="range" min="0.35" max="2.8" step="0.05" data-asset-edit="scale"><output data-asset-output="scale">0</output></label>
+        <label>Largo <input type="range" min="0.2" max="4.5" step="0.05" data-asset-edit="scaleX"><output data-asset-output="scaleX">0</output></label>
+        <label>Ancho <input type="range" min="0.2" max="4.5" step="0.05" data-asset-edit="scaleZ"><output data-asset-output="scaleZ">0</output></label>
         <label>Altura <input type="range" min="0.1" max="4.2" step="0.05" data-asset-edit="y"><output data-asset-output="y">0</output></label>
         <label>Giro <input type="range" min="-180" max="180" step="1" data-asset-edit="rotation"><output data-asset-output="rotation">0°</output></label>
         <label>Flip <input type="range" min="-1" max="1" step="2" data-asset-edit="flip"><output data-asset-output="flip">Normal</output></label>
@@ -1397,20 +1493,7 @@ function setupZoneRotationPanel() {
   panel.querySelectorAll("[data-asset-type]").forEach((button) => {
     button.addEventListener("click", () => {
       const isActive = selectedAssetType === button.dataset.assetType;
-      selectedAssetType = isActive ? null : button.dataset.assetType;
-      selectedIslandType = null;
-      selectedRoadType = null;
-      panel.querySelectorAll("[data-island-type]").forEach((item) => item.classList.remove("is-active"));
-      panel.querySelectorAll("[data-road-type]").forEach((item) => item.classList.remove("is-active"));
-      panel.querySelectorAll("[data-asset-type]").forEach((item) => {
-        item.classList.toggle("is-active", item.dataset.assetType === selectedAssetType);
-      });
-      const status = panel.querySelector(".asset-builder-status");
-      if (status) {
-        status.textContent = selectedAssetType
-          ? `${ASSET_TYPES[selectedAssetType].label}: click en el mapa para colocar.`
-          : "Selecciona un asset y haz click en el mapa.";
-      }
+      setAssetCreationType(isActive ? null : button.dataset.assetType);
     });
     button.addEventListener("dragstart", (event) => {
       event.dataTransfer?.setData("text/plain", button.dataset.assetType);
@@ -1444,6 +1527,7 @@ function setupZoneRotationPanel() {
   });
 
   panel.querySelectorAll("[data-island-edit]").forEach((input) => {
+    input.addEventListener("pointerdown", captureEditorHistory);
     input.addEventListener("input", () => {
       if (!selectedIslandId) return;
       const island = getIslandData(selectedIslandId);
@@ -1456,6 +1540,7 @@ function setupZoneRotationPanel() {
   panel.querySelector(".delete-island").addEventListener("click", deleteSelectedIsland);
 
   panel.querySelectorAll("[data-asset-edit]").forEach((input) => {
+    input.addEventListener("pointerdown", captureEditorHistory);
     input.addEventListener("input", () => {
       if (!selectedAssetId) return;
       const key = input.dataset.assetEdit;
@@ -1467,6 +1552,7 @@ function setupZoneRotationPanel() {
   panel.querySelector(".duplicate-asset").addEventListener("click", duplicateSelectedAsset);
 
   panel.querySelectorAll("[data-road-edit]").forEach((input) => {
+    input.addEventListener("pointerdown", captureEditorHistory);
     input.addEventListener("input", () => {
       if (!selectedRoadId) return;
       const key = input.dataset.roadEdit;
@@ -1488,6 +1574,7 @@ function setupZoneRotationPanel() {
   });
 
   panel.querySelector(".clear-road-values").addEventListener("click", () => {
+    captureEditorHistory();
     layoutRoadGroup?.clear();
     layoutRoads.splice(0, layoutRoads.length);
     selectedRoadId = null;
@@ -1691,7 +1778,7 @@ function updateAssetEditorPanel() {
         ? `${asset[key]}°`
         : key === "flip"
           ? (asset[key] < 0 ? "Invertido" : "Normal")
-          : asset[key].toFixed(2);
+          : (asset[key] ?? asset.scale).toFixed(2);
     }
   });
 }
@@ -2300,11 +2387,18 @@ function buildCity() {
   ground.receiveShadow = true;
   scene.add(ground);
 
-  const grid = new THREE.GridHelper(44, 44, 0xebd88c, 0xebd88c);
+const grid = new THREE.GridHelper(44, 44, 0xebd88c, 0xebd88c);
   grid.material.opacity = 0.45;
   grid.material.transparent = true;
   grid.position.y = 0.01;
   scene.add(grid);
+
+  const technicalGrid = new THREE.GridHelper(TECH_GRID_SIZE, TECH_GRID_DIVISIONS, 0xf1c84a, 0xf1c84a);
+  technicalGrid.name = "technical_snap_grid";
+  technicalGrid.material.opacity = 0.22;
+  technicalGrid.material.transparent = true;
+  technicalGrid.position.y = 0.018;
+  scene.add(technicalGrid);
 
   layoutIslandGroup = new THREE.Group();
   layoutIslandGroup.name = "layout_islands";
@@ -2366,6 +2460,8 @@ function buildCity() {
     createLayoutAsset(asset.type, asset.x, asset.z, {
       id: asset.id,
       scale: isFiniteNumber(asset.scale) ? asset.scale : undefined,
+      scaleX: isFiniteNumber(asset.scaleX) ? asset.scaleX : undefined,
+      scaleZ: isFiniteNumber(asset.scaleZ) ? asset.scaleZ : undefined,
       y: isFiniteNumber(asset.y) ? asset.y : undefined,
       flip: isFiniteNumber(asset.flip) ? asset.flip : undefined,
       rotation: isFiniteNumber(asset.rotation) ? asset.rotation : undefined,
@@ -2643,6 +2739,7 @@ function startZoneDrag(event) {
   }
   const roadHit = getRoadHit(event);
   if (roadHit?.object) {
+    captureEditorHistory();
     draggedRoadId = roadHit.id;
     didDragZone = false;
     selectLayoutRoad(roadHit.id);
@@ -2656,6 +2753,7 @@ function startZoneDrag(event) {
   }
   const assetHit = getAssetHit(event);
   if (assetHit?.object) {
+    captureEditorHistory();
     draggedAssetId = assetHit.id;
     didDragZone = false;
     selectLayoutAsset(assetHit.id);
@@ -2669,6 +2767,7 @@ function startZoneDrag(event) {
   }
   const islandHit = getIslandHit(event);
   if (islandHit?.mesh) {
+    captureEditorHistory();
     draggedIslandId = islandHit.id;
     didDragZone = false;
     selectLayoutIsland(islandHit.id);
@@ -2682,6 +2781,7 @@ function startZoneDrag(event) {
   }
   const hit = getZoneHit(event);
   if (hit?.root) {
+    captureEditorHistory();
     draggedZoneId = hit.id;
     didDragZone = false;
     setActive(hit.id);
@@ -2784,6 +2884,20 @@ function moveZoneDrag(event) {
   event.stopPropagation();
 }
 
+function deleteSelectedEditorItem() {
+  if (selectedAssetId) {
+    deleteSelectedAsset();
+    return;
+  }
+  if (selectedRoadId) {
+    deleteSelectedRoad();
+    return;
+  }
+  if (selectedIslandId) {
+    deleteSelectedIsland();
+  }
+}
+
 function endZoneDrag(event) {
   if (isScenePanning) {
     endScenePan(event);
@@ -2816,6 +2930,19 @@ if (canvas) {
   resize();
   window.addEventListener("resize", resize);
   window.addEventListener("keydown", (event) => {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
+      event.preventDefault();
+      undoEditorChange();
+      return;
+    }
+    if (event.key === "Delete" || event.key === "Backspace") {
+      const tag = document.activeElement?.tagName?.toLowerCase();
+      if (tag !== "input" && tag !== "textarea") {
+        event.preventDefault();
+        deleteSelectedEditorItem();
+      }
+      return;
+    }
     if (event.code !== "Space") return;
     isSpaceDown = true;
     document.body.classList.add("is-layout-pan-ready");
@@ -2833,6 +2960,7 @@ if (canvas) {
   });
   canvas.addEventListener("pointerdown", startZoneDrag, { capture: true });
   canvas.addEventListener("pointermove", moveZoneDrag, { capture: true });
+  canvas.addEventListener("pointermove", updateAssetHover);
   canvas.addEventListener("pointerup", endZoneDrag, { capture: true });
   canvas.addEventListener("pointercancel", endZoneDrag, { capture: true });
   canvas.addEventListener("click", pick);
