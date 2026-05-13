@@ -1134,6 +1134,23 @@ button {
   overflow: hidden;
 }
 
+.city-app::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 48% 52%, rgba(247, 189, 0, 0.08), transparent 19%),
+    rgba(17, 17, 17, 0.2);
+  opacity: 0;
+  transition: opacity 520ms ease;
+}
+
+.city-app.is-cinematic-focus::after {
+  opacity: 1;
+}
+
 .bottom-menu {
   position: fixed;
   left: 52px;
@@ -1592,6 +1609,66 @@ body.is-layout-panning #city {
   pointer-events: none;
 }
 
+.cinematic-zone-hud {
+  position: absolute;
+  right: clamp(28px, 5vw, 78px);
+  bottom: clamp(108px, 12vh, 150px);
+  z-index: 14;
+  width: min(330px, calc(100vw - 56px));
+  padding: 18px;
+  border: 2px solid rgba(17, 17, 17, 0.18);
+  border-radius: 14px;
+  background: rgba(247, 246, 241, 0.9);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.12);
+  opacity: 0;
+  pointer-events: none;
+  backdrop-filter: blur(16px);
+}
+
+.cinematic-zone-hud span {
+  display: inline-flex;
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  border: 2px solid #111;
+  border-radius: 999px;
+  background: var(--yellow);
+  color: #111;
+  font-size: 10px;
+  font-weight: 1000;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.cinematic-zone-hud strong {
+  display: block;
+  color: #111;
+  font-size: 28px;
+  font-weight: 1000;
+  line-height: 0.92;
+  text-transform: uppercase;
+}
+
+.cinematic-zone-hud p {
+  max-width: 250px;
+  margin: 10px 0 14px;
+  color: rgba(17, 17, 17, 0.72);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.32;
+}
+
+.cinematic-zone-hud button {
+  width: 100%;
+  height: 42px;
+  border: 2px solid #111;
+  border-radius: 9px;
+  background: #111;
+  color: var(--yellow);
+  font-size: 12px;
+  font-weight: 1000;
+  text-transform: uppercase;
+}
+
 .editor-panel-stack {
   position: absolute;
   top: 104px;
@@ -1876,12 +1953,50 @@ body.is-layout-panning #city {
   font-variant-numeric: tabular-nums;
 }
 
+.road-color-picker {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.road-color-picker button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  min-height: 30px;
+  border: 2px solid #cfcfc9;
+  border-radius: 8px;
+  background: #fff;
+  color: #111;
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.road-color-picker button::before {
+  width: 13px;
+  height: 13px;
+  border: 1px solid #111;
+  border-radius: 50%;
+  background: var(--swatch);
+  content: "";
+}
+
+.road-color-picker button.is-active {
+  border-color: var(--yellow);
+  background: #fff8d8;
+}
+
 .island-editor.is-empty label,
 .island-editor.is-empty .delete-island,
 .asset-editor.is-empty label,
 .asset-editor.is-empty .duplicate-asset,
 .asset-editor.is-empty .delete-asset,
 .road-editor.is-empty label,
+.road-editor.is-empty .road-color-picker,
 .road-editor.is-empty .delete-road {
   opacity: 0.38;
   pointer-events: none;
@@ -1949,7 +2064,9 @@ body.is-layout-panning #city {
 .refresh-layout-values,
 .copy-road-values,
 .clear-road-values,
-.save-all-editor-values {
+.save-all-editor-values,
+.copy-all-editor-values,
+.import-all-editor-values {
   width: 100%;
   height: 38px;
   border: 2px solid #111;
@@ -1973,7 +2090,9 @@ body.is-layout-panning #city {
 .refresh-layout-values:hover,
 .copy-road-values:hover,
 .clear-road-values:hover,
-.save-all-editor-values:hover {
+.save-all-editor-values:hover,
+.copy-all-editor-values:hover,
+.import-all-editor-values:hover {
   transform: translateY(-1px);
   background: var(--yellow);
   color: #111;
@@ -1985,12 +2104,127 @@ body.is-layout-panning #city {
   color: #111;
 }
 
+.copy-all-editor-values,
+.import-all-editor-values {
+  background: #fff;
+  color: #111;
+}
+
 .editor-save-panel small {
   color: rgba(17, 17, 17, 0.58);
   font-size: 10px;
   font-weight: 900;
   text-align: center;
   text-transform: uppercase;
+}
+
+.editor-import-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 22px;
+  background: rgba(17, 17, 17, 0.72);
+}
+
+.editor-import-card {
+  width: min(760px, calc(100vw - 44px));
+  max-height: min(780px, calc(100vh - 44px));
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 2px solid #111;
+  border-radius: 12px;
+  background: #f7f6f1;
+  box-shadow: 0 22px 64px rgba(0, 0, 0, 0.24);
+}
+
+.editor-import-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.editor-import-head strong {
+  font-size: 18px;
+  font-weight: 1000;
+  text-transform: uppercase;
+}
+
+.editor-import-close {
+  width: 36px;
+  height: 36px;
+  border: 2px solid #111;
+  border-radius: 999px;
+  background: var(--yellow);
+  color: #111;
+  font-size: 22px;
+  font-weight: 1000;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.editor-import-card p {
+  margin: 0;
+  color: rgba(17, 17, 17, 0.72);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.editor-import-card textarea {
+  width: 100%;
+  min-height: 360px;
+  max-height: min(52vh, 520px);
+  padding: 12px;
+  border: 2px solid #111;
+  border-radius: 10px;
+  background: #fff;
+  color: #111;
+  font: 700 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  resize: vertical;
+}
+
+.editor-import-status {
+  min-height: 22px;
+  padding: 9px 11px;
+  border: 1px solid rgba(17, 17, 17, 0.16);
+  border-radius: 8px;
+  background: #fff;
+  color: rgba(17, 17, 17, 0.72);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.editor-import-status.is-error {
+  border-color: #111;
+  background: var(--yellow);
+  color: #111;
+}
+
+.editor-import-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+}
+
+.editor-import-actions button {
+  height: 42px;
+  border: 2px solid #111;
+  border-radius: 9px;
+  background: #fff;
+  color: #111;
+  font-size: 12px;
+  font-weight: 1000;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.editor-import-actions .editor-import-submit {
+  background: #111;
+  color: var(--yellow);
 }
 
 .zone-label {

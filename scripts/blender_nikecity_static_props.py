@@ -5,6 +5,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import bpy
+import mathutils
 from nikecity_blender_common import (
     ASSETS,
     ZONE_DIR,
@@ -38,6 +39,25 @@ def export_prop(filename):
         export_yup=True,
         use_selection=False,
     )
+
+
+def rod(name, start, end, radius, material, vertices=10, bevel_amount=0.001):
+    start_v = mathutils.Vector(start)
+    end_v = mathutils.Vector(end)
+    mid = (start_v + end_v) * 0.5
+    direction = end_v - start_v
+    bpy.ops.mesh.primitive_cylinder_add(vertices=vertices, radius=radius, depth=direction.length, location=mid)
+    obj = bpy.context.object
+    obj.name = name
+    obj.rotation_euler = direction.to_track_quat("Z", "Y").to_euler()
+    assign(obj, material)
+    bpy.ops.object.shade_smooth()
+    if bevel_amount:
+        mod = obj.modifiers.new("tiny rod bevel", "BEVEL")
+        mod.width = bevel_amount
+        mod.segments = 1
+        obj.modifiers.new("weighted normals", "WEIGHTED_NORMAL")
+    return obj
 
 
 def umbrella_asset():
@@ -150,6 +170,55 @@ def parking_sign_asset():
     export_prop("prop_parking_sign.glb")
 
 
+def traffic_light_asset():
+    clear_scene()
+    global M
+    M = make_materials()
+    cyl("traffic light pole", (0, 0, 0.38), 0.014, 0.62, M["pole"], 12)
+    cyl("traffic light base", (0, 0, 0.07), 0.055, 0.035, M["black"], 20, 0.004)
+    cube("traffic light black head", (0, -0.012, 0.68), (0.14, 0.075, 0.34), M["black"], 0, 0.012)
+    cyl("traffic top yellow lamp", (0, -0.052, 0.78), 0.035, 0.012, M["yellow"], 20, 0.002, (math.pi / 2, 0, 0))
+    cyl("traffic middle white lamp", (0, -0.052, 0.68), 0.032, 0.012, M["white"], 20, 0.002, (math.pi / 2, 0, 0))
+    cyl("traffic bottom yellow lamp", (0, -0.052, 0.58), 0.035, 0.012, M["yellow"], 20, 0.002, (math.pi / 2, 0, 0))
+    cube("traffic side visor top", (0, -0.075, 0.78), (0.11, 0.018, 0.022), M["yellow"], 0, 0.003)
+    cube("traffic side visor mid", (0, -0.075, 0.68), (0.1, 0.018, 0.02), M["white"], 0, 0.003)
+    cube("traffic side visor bottom", (0, -0.075, 0.58), (0.11, 0.018, 0.022), M["yellow"], 0, 0.003)
+    cube("traffic small cross arm", (0.11, 0, 0.76), (0.22, 0.02, 0.02), M["pole"], 0, 0.003)
+    export_prop("prop_traffic_light.glb")
+
+
+def bicycle_asset(filename, frame_key):
+    clear_scene()
+    global M
+    M = make_materials()
+    frame_material = M[frame_key]
+    seat_material = M["black"]
+    cyl("bike rear wheel", (-0.22, 0, 0.14), 0.13, 0.025, M["black"], 36, 0.003, (math.pi / 2, 0, 0))
+    cyl("bike rear wheel inner", (-0.22, 0.002, 0.14), 0.085, 0.027, M["white"], 28, 0.002, (math.pi / 2, 0, 0))
+    cyl("bike front wheel", (0.24, 0, 0.14), 0.13, 0.025, M["black"], 36, 0.003, (math.pi / 2, 0, 0))
+    cyl("bike front wheel inner", (0.24, 0.002, 0.14), 0.085, 0.027, M["white"], 28, 0.002, (math.pi / 2, 0, 0))
+    rear = (-0.22, 0, 0.14)
+    front = (0.24, 0, 0.14)
+    crank = (0, 0, 0.24)
+    seat = (-0.07, 0, 0.45)
+    handle = (0.27, 0, 0.48)
+    rod("bike lower tube", rear, crank, 0.015, frame_material)
+    rod("bike chain stay", crank, front, 0.015, frame_material)
+    rod("bike top tube", seat, handle, 0.014, frame_material)
+    rod("bike rear tube", rear, seat, 0.014, frame_material)
+    rod("bike front tube", crank, handle, 0.014, frame_material)
+    rod("bike seat post", (-0.07, 0, 0.29), seat, 0.012, frame_material)
+    cube("bike black seat", (-0.05, 0, 0.49), (0.16, 0.07, 0.035), seat_material, 0, 0.008)
+    rod("bike front fork left", (0.22, -0.018, 0.16), handle, 0.011, frame_material)
+    rod("bike front fork right", (0.26, 0.018, 0.16), handle, 0.011, frame_material)
+    rod("bike handlebar stem", handle, (0.31, 0, 0.57), 0.011, frame_material)
+    cube("bike handlebar", (0.31, 0, 0.57), (0.2, 0.025, 0.025), seat_material, 0, 0.004)
+    cyl("bike pedal hub", (0, 0, 0.24), 0.035, 0.03, M["black"], 18, 0.002, (math.pi / 2, 0, 0))
+    cube("bike pedal left", (0.055, -0.02, 0.25), (0.1, 0.018, 0.016), frame_material, math.radians(20), 0.002)
+    cube("bike tiny rear fender", (-0.22, 0, 0.28), (0.22, 0.032, 0.028), frame_material, 0, 0.004)
+    export_prop(filename)
+
+
 def build_all():
     umbrella_asset()
     lamp_asset()
@@ -162,6 +231,9 @@ def build_all():
     bollard_asset()
     fountain_asset()
     parking_sign_asset()
+    traffic_light_asset()
+    bicycle_asset("prop_bicycle_yellow.glb", "yellow")
+    bicycle_asset("prop_bicycle_white.glb", "white")
 
 
 build_all()

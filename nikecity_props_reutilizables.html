@@ -42,34 +42,50 @@
       controls.enableDamping = true; controls.dampingFactor = 0.08; controls.target.set(0, 0.35, 0); controls.minZoom = 0.7; controls.maxZoom = 3.4;
       scene.add(new THREE.HemisphereLight(0xffffff, 0xd8d1c4, 1.9));
       const sun = new THREE.DirectionalLight(0xffffff, 2.35); sun.position.set(6, 12, 5); scene.add(sun);
-      const loader = new GLTFLoader();
+      const manager = new THREE.LoadingManager();
+      const loader = new GLTFLoader(manager);
+      const failed = [];
       const props = [
-        ["prop_tree_yellow.glb", [-4.4, 0.55, 0], 1],
-        ["prop_tree_white.glb", [-3.5, 0.55, 0], 1],
-        ["prop_tree_cone.glb", [-2.6, 0.55, 0], 1],
-        ["prop_umbrella.glb", [-1.6, 0.55, 0], 1],
-        ["prop_lamp.glb", [-0.7, 0.55, 0], 1],
-        ["prop_bench.glb", [0.2, 0.55, 0], 1],
-        ["prop_nike_sign.glb", [1.2, 0.55, 0], 1],
-        ["prop_flag.glb", [2.25, 0.55, 0], 1],
-        ["prop_bollard.glb", [3.15, 0.55, 0], 1],
-        ["prop_fountain.glb", [4.05, 0.55, 0], 1],
-        ["prop_parking_sign.glb", [4.95, 0.55, 0], 1],
+        ["prop_tree_yellow.glb", [-5.3, 0.55, 0], 1],
+        ["prop_tree_white.glb", [-4.45, 0.55, 0], 1],
+        ["prop_tree_cone.glb", [-3.6, 0.55, 0], 1],
+        ["prop_umbrella.glb", [-2.65, 0.55, 0], 1],
+        ["prop_lamp.glb", [-1.8, 0.55, 0], 1],
+        ["prop_bench.glb", [-0.95, 0.55, 0], 1],
+        ["prop_nike_sign.glb", [0.05, 0.55, 0], 1],
+        ["prop_flag.glb", [1.0, 0.55, 0], 1],
+        ["prop_bollard.glb", [1.85, 0.55, 0], 1],
+        ["prop_fountain.glb", [2.7, 0.55, 0], 1],
+        ["prop_parking_sign.glb", [3.55, 0.55, 0], 1],
+        ["prop_traffic_light.glb", [4.4, 0.55, 0], 1],
+        ["prop_bicycle_yellow.glb", [5.3, 0.55, 0], 1],
+        ["prop_bicycle_white.glb", [6.15, 0.55, 0], 1],
       ];
+      status.textContent = `Cargando ${props.length} props...`;
+      manager.onProgress = (url, loaded, total) => {
+        status.textContent = `Cargando props ${loaded}/${total}...`;
+      };
+      manager.onLoad = () => {
+        status.textContent = failed.length ? `No cargaron: ${failed.join(", ")}` : "";
+      };
+      manager.onError = (url) => {
+        failed.push(url.split("/").pop().split("?")[0]);
+      };
       props.forEach(([file, pos, scale]) => {
-        loader.load(`assets/models/props/${file}?v=20260512_props_no_bases_02`, (gltf) => {
+        loader.load(`assets/models/props/${file}?v=20260512_props_traffic_bike_04`, (gltf) => {
           gltf.scene.position.set(pos[0], pos[1], pos[2]);
           gltf.scene.scale.setScalar(scale);
           scene.add(gltf.scene);
         }, undefined, (error) => {
-          status.textContent = `No se pudo cargar ${file}. Revisa que hayas exportado los props y usa localhost.`;
+          if (!failed.includes(file)) failed.push(file);
+          status.textContent = `No se pudo cargar ${file}.`;
           console.error(error);
         });
       });
       function resize() {
         const width = window.innerWidth, height = window.innerHeight;
         renderer.setSize(width, height, false);
-        const aspect = width / height, frustum = width < 760 ? 4.4 : 3.3;
+        const aspect = width / height, frustum = width < 760 ? 5.0 : 3.85;
         camera.left = -frustum * aspect; camera.right = frustum * aspect; camera.top = frustum; camera.bottom = -frustum; camera.updateProjectionMatrix();
       }
       window.addEventListener("resize", resize); resize();

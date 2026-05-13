@@ -47,6 +47,7 @@ const PROP_ASSET_BASE = "assets/models/props/";
 const SHOW_CITY_ROADS = false;
 const SHOW_LAYOUT_ISLANDS = true;
 const SHOW_CITY_ATMOSPHERE = true;
+const SHOW_FLOOR_GRID = false;
 const MORPH_PATHS = {
   below: "M0 126 C16 113 32 141 50 126 C68 111 84 141 100 126 L100 176 C82 164 68 182 50 168 C32 154 18 182 0 168 Z",
   blackCover: "M0 -52 C14 -32 28 -68 46 -48 C62 -30 78 -70 100 -42 L100 176 C82 164 68 182 50 168 C32 154 18 182 0 168 Z",
@@ -230,6 +231,16 @@ const ROAD_TYPES = {
   laneWhiteLong: { label: "Linea blanca larga", w: 6.3, d: 0.16 },
   laneOrange: { label: "Linea naranja", w: 2.2, d: 0.16 }
 };
+const ROAD_COLOR_OPTIONS = {
+  asphalt: { label: "Gris actual", color: 0x3a3b3d },
+  graphite: { label: "Gris grafito", color: 0x2f3032 },
+  soft: { label: "Gris medio", color: 0x48494b },
+  light: { label: "Gris claro", color: 0x5a5b5d },
+  concrete: { label: "Concreto", color: 0xd9d9d9 },
+  pale: { label: "Gris blanco", color: 0xefefef },
+  ultraLight: { label: "Casi blanco", color: 0xf8f8f8 },
+  white: { label: "Blanco", color: 0xf5f5f3 }
+};
 const ZONE_BASE_DEFAULTS = {
   soccer: { w: 5.05, d: 3.38 },
   running: { w: 4.45, d: 3.15 },
@@ -299,10 +310,13 @@ let roadIdCounter = 0;
 let draggedIslandId = null;
 let draggedAssetId = null;
 let draggedRoadId = null;
+let isApplyingStoredEditorState = false;
 const zoneBaseHelpers = new Map();
 const zoneBaseValues = new Map();
 const LAYOUT_STORAGE_KEY = "nike-city-layout-editor-v2";
+const LAYOUT_BACKUP_STORAGE_KEY = "nike-city-layout-editor-v2-backup";
 const ROAD_STORAGE_KEY = "nike-city-road-editor-v2";
+const ROAD_BACKUP_STORAGE_KEY = "nike-city-road-editor-v2-backup";
 const SOUND_STORAGE_KEY = "nike-city-sound-enabled";
 const savedLayoutState = loadLayoutState() || DEFAULT_LAYOUT_STATE;
 const savedRoadState = loadRoadState();
@@ -313,6 +327,9 @@ let musicTimer = null;
 let masterGain = null;
 let musicStep = 0;
 let musicEnabled = window.localStorage.getItem(SOUND_STORAGE_KEY) !== "off";
+let cinematicFocusGlow = null;
+let cinematicFocusHud = null;
+let cinematicFocusTl = null;
 
 function isFiniteNumber(value) {
   return typeof value === "number" && Number.isFinite(value);
@@ -321,30 +338,49 @@ function isFiniteNumber(value) {
 function loadLayoutState() {
   try {
     const raw = window.localStorage.getItem(LAYOUT_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
+    if (raw) return JSON.parse(raw);
+    const backup = window.localStorage.getItem(LAYOUT_BACKUP_STORAGE_KEY);
+    return backup ? JSON.parse(backup) : null;
   } catch {
-    return null;
+    try {
+      const backup = window.localStorage.getItem(LAYOUT_BACKUP_STORAGE_KEY);
+      return backup ? JSON.parse(backup) : null;
+    } catch {
+      return null;
+    }
   }
 }
 
 function loadRoadState() {
   try {
     const raw = window.localStorage.getItem(ROAD_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
+    if (raw) return JSON.parse(raw);
+    const backup = window.localStorage.getItem(ROAD_BACKUP_STORAGE_KEY);
+    return backup ? JSON.parse(backup) : null;
   } catch {
-    return null;
+    try {
+      const backup = window.localStorage.getItem(ROAD_BACKUP_STORAGE_KEY);
+      return backup ? JSON.parse(backup) : null;
+    } catch {
+      return null;
+    }
   }
 }
 
 function getRoadState() {
   return {
-    roads: layoutRoads
+    roads: layoutRoads.map((road) => ({
+      ...road,
+      opacity: isFiniteNumber(road.opacity) ? road.opacity : 1
+    }))
   };
 }
 
 function saveRoadState() {
   try {
-    window.localStorage.setItem(ROAD_STORAGE_KEY, JSON.stringify(getRoadState()));
+    const state = JSON.stringify(getRoadState());
+    window.localStorage.setItem(ROAD_STORAGE_KEY, state);
+    window.localStorage.setItem(ROAD_BACKUP_STORAGE_KEY, state);
   } catch {
     // Copying values still works if local storage is unavailable.
   }
@@ -385,7 +421,8 @@ function restoreEditorSnapshot(snapshotText) {
     const snapshot = JSON.parse(snapshotText);
     window.localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(snapshot.layout));
     window.localStorage.setItem(ROAD_STORAGE_KEY, JSON.stringify(snapshot.roads));
-    window.location.href = `${window.location.pathname}?v=road-editor-15`;
+    isApplyingStoredEditorState = true;
+    window.location.href = `${window.location.pathname}?v=road-editor-26`;
   } catch {
     // If a snapshot is corrupted, keep the current editor state.
   }
@@ -398,7 +435,9 @@ function undoEditorChange() {
 
 function saveLayoutState() {
   try {
-    window.localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(getLayoutState()));
+    const state = JSON.stringify(getLayoutState());
+    window.localStorage.setItem(LAYOUT_STORAGE_KEY, state);
+    window.localStorage.setItem(LAYOUT_BACKUP_STORAGE_KEY, state);
   } catch {
     // Local storage can be unavailable in strict browser modes; the copy button still works.
   }
@@ -416,6 +455,106 @@ function saveAllEditorState(button = null) {
     button.textContent = originalText;
     button.classList.remove("is-saved");
   }, 1100);
+}
+
+function persistEditorStateNow() {
+  if (!canvas || !citySection || !layoutRoadGroup) return;
+  if (isApplyingStoredEditorState) return;
+  saveLayoutState();
+  saveRoadState();
+}
+
+function importEditorStateFromText(text) {
+  if (!text) return false;
+  try {
+    const snapshot = JSON.parse(text);
+    const layout = snapshot.layout || snapshot;
+    const roads = snapshot.roads || null;
+    if (!layout?.zones || !layout?.bases) throw new Error("Layout incompleto");
+    window.localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(layout));
+    window.localStorage.setItem(LAYOUT_BACKUP_STORAGE_KEY, JSON.stringify(layout));
+    if (roads?.roads) {
+      window.localStorage.setItem(ROAD_STORAGE_KEY, JSON.stringify(roads));
+      window.localStorage.setItem(ROAD_BACKUP_STORAGE_KEY, JSON.stringify(roads));
+    }
+    isApplyingStoredEditorState = true;
+    window.location.href = `${window.location.pathname}?v=road-editor-26`;
+    return true;
+  } catch (error) {
+    window.alert("El JSON no se pudo importar. Revisa que tenga layout y roads completos.");
+    return false;
+  }
+}
+
+function closeEditorImportModal() {
+  document.querySelector(".editor-import-modal")?.remove();
+  if (controls) controls.enabled = true;
+}
+
+function getImportSummary(text) {
+  const snapshot = JSON.parse(text);
+  const layout = snapshot.layout || snapshot;
+  const roads = snapshot.roads || null;
+  if (!layout?.zones || !layout?.bases) throw new Error("Layout incompleto");
+  return {
+    zones: Object.keys(layout.zones || {}).length,
+    islands: layout.islands?.length || 0,
+    assets: layout.assets?.length || 0,
+    roads: roads?.roads?.length || 0
+  };
+}
+
+function showEditorImportModal() {
+  closeEditorImportModal();
+  if (controls) controls.enabled = false;
+  const modal = document.createElement("div");
+  modal.className = "editor-import-modal";
+  modal.innerHTML = `
+    <div class="editor-import-card" role="dialog" aria-modal="true" aria-labelledby="editor-import-title">
+      <div class="editor-import-head">
+        <strong id="editor-import-title">Importar JSON</strong>
+        <button type="button" class="editor-import-close" aria-label="Cerrar">×</button>
+      </div>
+      <p>Pega aqui el JSON completo. Antes de aplicarlo revisare que entren zonas, islas, assets y calles.</p>
+      <textarea spellcheck="false" aria-label="JSON completo de Nike City"></textarea>
+      <div class="editor-import-status">Esperando JSON completo.</div>
+      <div class="editor-import-actions">
+        <button type="button" class="editor-import-cancel">Cancelar</button>
+        <button type="button" class="editor-import-check">Revisar JSON</button>
+        <button type="button" class="editor-import-submit">Importar</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  const textarea = modal.querySelector("textarea");
+  const status = modal.querySelector(".editor-import-status");
+  const showSummary = () => {
+    try {
+      const summary = getImportSummary(textarea.value.trim());
+      status.textContent = `${summary.zones} zonas · ${summary.islands} islas · ${summary.assets} assets · ${summary.roads} calles detectadas`;
+      status.classList.remove("is-error");
+      return true;
+    } catch {
+      status.textContent = "No pude leer el JSON completo. Revisa que no se haya cortado al copiarlo.";
+      status.classList.add("is-error");
+      return false;
+    }
+  };
+  textarea.focus();
+  modal.querySelector(".editor-import-cancel").addEventListener("click", closeEditorImportModal);
+  modal.querySelector(".editor-import-close").addEventListener("click", closeEditorImportModal);
+  modal.querySelector(".editor-import-check").addEventListener("click", showSummary);
+  modal.querySelector(".editor-import-submit").addEventListener("click", () => {
+    if (!showSummary()) return;
+    importEditorStateFromText(textarea.value);
+  });
+  modal.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeEditorImportModal();
+  });
+  modal.addEventListener("pointerdown", (event) => {
+    if (event.target === modal) closeEditorImportModal();
+    event.stopPropagation();
+  });
 }
 
 function groupedAssetButtons() {
@@ -437,11 +576,15 @@ function groupedAssetButtons() {
 
 function refreshLayoutState() {
   try {
+    isApplyingStoredEditorState = true;
     window.localStorage.removeItem(LAYOUT_STORAGE_KEY);
+    window.localStorage.removeItem(LAYOUT_BACKUP_STORAGE_KEY);
+    window.localStorage.removeItem(ROAD_STORAGE_KEY);
+    window.localStorage.removeItem(ROAD_BACKUP_STORAGE_KEY);
   } catch {
     // Nothing else to do; reload still restores the code defaults.
   }
-  window.location.href = `${window.location.pathname}?v=road-editor-15`;
+  window.location.href = `${window.location.pathname}?v=road-editor-26`;
 }
 
 function addSceneObject(object) {
@@ -476,11 +619,9 @@ function setZoneRotation(id, degrees) {
   if (helper) {
     helper.rotation.y = THREE.MathUtils.degToRad(degrees);
   }
-  const position = zonePositionValues.get(id);
-  if (position) {
-    const snapped = snapZonePosition(position.x, position.z, id);
-    setZonePosition(id, snapped.x, snapped.z);
-  }
+  updateZoneLayoutPanel(id);
+  updateZoneBasePanel(id);
+  projectLabels();
   saveLayoutState();
 }
 
@@ -670,11 +811,7 @@ function snapZoneAxis(value, axis, currentZoneId) {
 }
 
 function snapZonePosition(x, z, zoneId) {
-  const gridSnapped = snapZoneToGridByAnchors(x, z, zoneId);
-  return {
-    x: snapZoneAxis(gridSnapped.x, "x", zoneId),
-    z: snapZoneAxis(gridSnapped.z, "z", zoneId)
-  };
+  return snapZoneToGridByAnchors(x, z, zoneId);
 }
 
 function getIslandFootprint(island) {
@@ -983,6 +1120,42 @@ function updateCityAtmosphere(time) {
   });
 }
 
+function updateAnimatedLayoutAssets(time) {
+  if (!layoutAssetGroup) return;
+  const t = time * 0.001;
+  layoutAssetGroup.children.forEach((object) => {
+    if (!object.userData.animatedAirAsset || object.userData.layoutAssetId === draggedAssetId) return;
+    const asset = getAssetData(object.userData.layoutAssetId);
+    const type = ASSET_TYPES[asset?.type];
+    if (!asset || !type) return;
+    const phase = object.userData.animationPhase ?? 0;
+    const baseX = asset.x;
+    const baseY = asset.y ?? type.y ?? 0.18;
+    const baseZ = asset.z;
+    const rotation = THREE.MathUtils.degToRad(asset.rotation);
+    if (type.kind === "cloud") {
+      object.position.x = baseX + Math.sin(t * 0.28 + phase) * 0.32;
+      object.position.y = baseY + Math.sin(t * 0.85 + phase) * 0.08;
+      object.position.z = baseZ + Math.cos(t * 0.22 + phase) * 0.12;
+      object.rotation.y = rotation + Math.sin(t * 0.18 + phase) * 0.035;
+      return;
+    }
+    if (asset.type === "helicopterOrange") {
+      object.position.x = baseX + Math.sin(t * 0.7 + phase) * 0.42;
+      object.position.y = baseY + Math.sin(t * 1.8 + phase) * 0.12;
+      object.position.z = baseZ + Math.cos(t * 0.65 + phase) * 0.22;
+      object.rotation.y = rotation + Math.sin(t * 0.9 + phase) * 0.12;
+      return;
+    }
+    if (asset.type === "planeOrange") {
+      object.position.x = baseX + Math.sin(t * 0.45 + phase) * 0.68;
+      object.position.y = baseY + Math.sin(t * 1.05 + phase) * 0.1;
+      object.position.z = baseZ + Math.cos(t * 0.42 + phase) * 0.28;
+      object.rotation.y = rotation + Math.sin(t * 0.7 + phase) * 0.08;
+    }
+  });
+}
+
 function addSmallIsland(parent, x, z, w, d, rot = 0, radius = 0.28) {
   const island = roundedSlab(w, d, 0.075, mats.layoutIsland, radius);
   island.position.set(x, 0.13, z);
@@ -1100,9 +1273,6 @@ function createLayoutAsset(typeId, x, z, options = {}) {
 
   if (type.kind === "cloud") {
     const asset = buildCloudAsset();
-    asset.position.set(assetData.x, assetData.y, assetData.z);
-    asset.rotation.y = THREE.MathUtils.degToRad(assetData.rotation);
-    asset.scale.set(assetData.scaleX * assetData.flip, assetData.scale, assetData.scaleZ);
     asset.userData.layoutAssetId = id;
     asset.traverse((child) => {
       child.userData.layoutAssetId = id;
@@ -1111,6 +1281,7 @@ function createLayoutAsset(typeId, x, z, options = {}) {
       child.receiveShadow = false;
     });
     layoutAssetGroup.add(asset);
+    applyLayoutAssetTransform(assetData, asset);
     if (options.select !== false) selectLayoutAsset(id);
     if (options.select !== false) selectedAssetId = id;
     if (options.persist !== false) saveLayoutState();
@@ -1123,9 +1294,6 @@ function createLayoutAsset(typeId, x, z, options = {}) {
   loader.load(type.url, (gltf) => {
     const asset = gltf.scene;
     asset.name = `asset_${typeId}`;
-    asset.position.set(assetData.x, assetData.y, assetData.z);
-    asset.rotation.y = THREE.MathUtils.degToRad(assetData.rotation);
-    asset.scale.set(assetData.scaleX * assetData.flip, assetData.scale, assetData.scaleZ);
     asset.userData.layoutAssetId = id;
     asset.traverse((child) => {
       child.userData.layoutAssetId = id;
@@ -1139,6 +1307,7 @@ function createLayoutAsset(typeId, x, z, options = {}) {
       layoutAssetMixers.set(id, mixer);
     }
     layoutAssetGroup.add(asset);
+    applyLayoutAssetTransform(assetData, asset);
     if (options.select !== false) selectLayoutAsset(id);
   }, undefined, () => {
     setAssetStatus(`${type.label}: no pudo cargar el GLB.`);
@@ -1149,6 +1318,21 @@ function createLayoutAsset(typeId, x, z, options = {}) {
   updateAssetLayoutPanel();
   updateAssetEditorPanel();
   return assetData;
+}
+
+function applyLayoutAssetTransform(asset, object = getAssetObject(asset.id)) {
+  if (!asset || !object) return;
+  const type = ASSET_TYPES[asset.type] || {};
+  object.position.set(asset.x, asset.y ?? type.y ?? 0.18, asset.z);
+  object.rotation.y = THREE.MathUtils.degToRad(asset.rotation);
+  object.scale.set((asset.scaleX ?? asset.scale) * (asset.flip ?? 1), asset.scale, asset.scaleZ ?? asset.scale);
+  object.userData.assetType = asset.type;
+  object.userData.baseX = asset.x;
+  object.userData.baseY = asset.y ?? type.y ?? 0.18;
+  object.userData.baseZ = asset.z;
+  object.userData.baseRotation = asset.rotation;
+  object.userData.animationPhase = object.userData.animationPhase ?? Math.random() * Math.PI * 2;
+  object.userData.animatedAirAsset = type.placement === "air" || type.kind === "cloud";
 }
 
 function getAssetData(id) {
@@ -1179,11 +1363,7 @@ function updateLayoutAsset(id, updates, persist = true) {
     asset.z = snapped.z;
   }
   if (object) {
-    object.position.x = asset.x;
-    object.position.y = asset.y ?? ASSET_TYPES[asset.type]?.y ?? 0.18;
-    object.position.z = asset.z;
-    object.rotation.y = THREE.MathUtils.degToRad(asset.rotation);
-    object.scale.set((asset.scaleX ?? asset.scale) * (asset.flip ?? 1), asset.scale, asset.scaleZ ?? asset.scale);
+    applyLayoutAssetTransform(asset, object);
   }
   updateAssetEditorPanel();
   updateAssetLayoutPanel();
@@ -1254,11 +1434,13 @@ function createAssetFromEvent(typeId, event) {
   if (!canPlaceAssetType(typeId, event)) return null;
   const point = getLayoutPlanePoint(event);
   if (!point) return null;
-  return createLayoutAsset(
+  const asset = createLayoutAsset(
     typeId,
     snapToLayoutGrid(point.x),
     snapToLayoutGrid(point.z)
   );
+  if (asset) setAssetCreationType(null);
+  return asset;
 }
 
 function setHoverAsset(id) {
@@ -1290,15 +1472,32 @@ function updateAssetHover(event) {
 }
 
 function isRoadMarkingType(typeId) {
-  return ["crosswalkWhite", "crosswalkOrange", "laneWhite", "laneOrange"].includes(typeId);
+  return ["crosswalkWhite", "crosswalkOrange", "laneWhite", "laneWhiteLong", "laneOrange"].includes(typeId);
 }
 
 function addRoadBox(group, w, d, mat = mats.road, x = 0, z = 0) {
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, 0.045, d), mat);
+  mesh.userData.isRoadSurface = mat === mats.road;
+  mesh.userData.canRoadTint = true;
   mesh.position.set(x, 0.055, z);
   mesh.receiveShadow = true;
   group.add(mesh);
   return mesh;
+}
+
+function applyRoadStyle(object, colorKey = "asphalt", opacity = 1) {
+  const colorOption = ROAD_COLOR_OPTIONS[colorKey] || ROAD_COLOR_OPTIONS.asphalt;
+  const alpha = THREE.MathUtils.clamp(isFiniteNumber(opacity) ? opacity : 1, 0.08, 1);
+  object?.traverse((child) => {
+    if (!child.isMesh || !child.userData.canRoadTint) return;
+    child.material = new THREE.MeshStandardMaterial({
+      color: colorOption.color,
+      roughness: 0.72,
+      transparent: alpha < 0.99,
+      opacity: alpha,
+      depthWrite: alpha >= 0.99
+    });
+  });
 }
 
 function buildRoadPiece(typeId) {
@@ -1319,6 +1518,7 @@ function buildRoadPiece(typeId) {
     [-0.42, -0.21, 0, 0.21, 0.42].forEach((x) => {
       const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.018, type.d), mat);
       stripe.position.set(x, 0.16, 0);
+      stripe.userData.canRoadTint = true;
       group.add(stripe);
     });
   } else if (typeId === "laneWhite" || typeId === "laneWhiteLong" || typeId === "laneOrange") {
@@ -1330,6 +1530,7 @@ function buildRoadPiece(typeId) {
       const x = start + step * index;
       const dash = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.016, type.d), mat);
       dash.position.set(x, 0.16, 0);
+      dash.userData.canRoadTint = true;
       group.add(dash);
     });
   } else {
@@ -1352,7 +1553,9 @@ function createLayoutRoad(typeId, x, z, options = {}) {
     z: Number(z.toFixed(2)),
     rotation: options.rotation ?? 0,
     scaleX: options.scaleX ?? 1,
-    scaleZ: options.scaleZ ?? 1
+    scaleZ: options.scaleZ ?? 1,
+    color: options.color || "asphalt",
+    opacity: options.opacity ?? 1
   };
   layoutRoads.push(roadData);
   const road = buildRoadPiece(typeId);
@@ -1381,10 +1584,8 @@ function getRoadObject(id) {
 }
 
 function setRoadSelectionMaterial(object, selected) {
-  object?.traverse((child) => {
-    if (!child.isMesh || child.material === mats.white || child.material === mats.roadOrange) return;
-    child.material = mats.road;
-  });
+  const road = getRoadData(object?.userData.layoutRoadId);
+  applyRoadStyle(object, road?.color, road?.opacity);
 }
 
 function selectLayoutRoad(id) {
@@ -1411,6 +1612,7 @@ function updateLayoutRoad(id, updates, persist = true) {
     object.position.set(road.x, 0, road.z);
     object.rotation.y = THREE.MathUtils.degToRad(road.rotation);
     object.scale.set(road.scaleX, 1, road.scaleZ);
+    applyRoadStyle(object, road.color, road.opacity);
   }
   updateRoadEditorPanel();
   updateRoadLayoutPanel();
@@ -1610,6 +1812,10 @@ function setupZoneRotationPanel() {
         <label>Largo <input type="range" min="0.25" max="5" step="0.05" data-road-edit="scaleX"><output data-road-output="scaleX">0</output></label>
         <label>Ancho <input type="range" min="0.25" max="4" step="0.05" data-road-edit="scaleZ"><output data-road-output="scaleZ">0</output></label>
         <label>Giro <input type="range" min="-180" max="180" step="1" data-road-edit="rotation"><output data-road-output="rotation">0°</output></label>
+        <label>Opacidad <input type="range" min="0.08" max="1" step="0.02" data-road-edit="opacity"><output data-road-output="opacity">1</output></label>
+        <div class="road-color-picker" aria-label="Color de calle">
+          ${Object.entries(ROAD_COLOR_OPTIONS).map(([id, item]) => `<button type="button" data-road-color="${id}" style="--swatch:${item.color.toString(16).padStart(6, "0")}">${item.label}</button>`).join("")}
+        </div>
         <button class="delete-road" type="button">Borrar calle</button>
       </div>
       <div class="road-actions">
@@ -1777,6 +1983,14 @@ function setupZoneRotationPanel() {
     });
   });
 
+  panel.querySelectorAll("[data-road-color]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (!selectedRoadId) return;
+      captureEditorHistory();
+      updateLayoutRoad(selectedRoadId, { color: button.dataset.roadColor });
+    });
+  });
+
   panel.querySelector(".delete-road").addEventListener("click", deleteSelectedRoad);
 
   panel.querySelector(".copy-road-values").addEventListener("click", async () => {
@@ -1902,7 +2116,9 @@ function setupZoneRotationPanel() {
     </div>
     <div class="save-panel-body">
       <button class="save-all-editor-values" type="button">Guardar todo</button>
-      <small>Zonas, islas, assets y calles</small>
+      <button class="copy-all-editor-values" type="button">Copiar todo JSON</button>
+      <button class="import-all-editor-values" type="button">Importar JSON</button>
+      <small class="editor-save-summary">Zonas, islas, assets y calles</small>
     </div>
   `;
   savePanel.addEventListener("pointerdown", (event) => {
@@ -1925,6 +2141,22 @@ function setupZoneRotationPanel() {
   savePanel.querySelector(".save-all-editor-values").addEventListener("click", (event) => {
     saveAllEditorState(event.currentTarget);
   });
+  savePanel.querySelector(".copy-all-editor-values").addEventListener("click", async (event) => {
+    persistEditorStateNow();
+    const text = JSON.stringify(getEditorSnapshot(), null, 2);
+    try {
+      await navigator.clipboard.writeText(text);
+      const button = event.currentTarget;
+      const originalText = button.textContent;
+      button.textContent = "Copiado";
+      window.setTimeout(() => {
+        button.textContent = originalText;
+      }, 1000);
+    } catch {
+      console.table(getEditorSnapshot());
+    }
+  });
+  savePanel.querySelector(".import-all-editor-values").addEventListener("click", showEditorImportModal);
   editorStack.appendChild(savePanel);
   updateZoneBasePanel(zones[0][0]);
   updateAssetLayoutPanel();
@@ -1947,6 +2179,7 @@ function updateIslandLayoutPanel() {
   if (output) {
     output.textContent = `${layoutIslands.length} ${layoutIslands.length === 1 ? "isla colocada" : "islas colocadas"}`;
   }
+  updateEditorSaveSummary();
 }
 
 function updateIslandEditorPanel() {
@@ -1974,6 +2207,7 @@ function updateAssetLayoutPanel() {
   if (output) {
     output.textContent = `${layoutAssets.length} ${layoutAssets.length === 1 ? "asset colocado" : "assets colocados"}`;
   }
+  updateEditorSaveSummary();
 }
 
 function updateAssetEditorPanel() {
@@ -2005,6 +2239,13 @@ function updateRoadLayoutPanel() {
   if (output) {
     output.textContent = `${layoutRoads.length} ${layoutRoads.length === 1 ? "calle colocada" : "calles colocadas"}`;
   }
+  updateEditorSaveSummary();
+}
+
+function updateEditorSaveSummary() {
+  const output = document.querySelector(".editor-save-summary");
+  if (!output) return;
+  output.textContent = `${layoutIslands.length} islas · ${layoutAssets.length} assets · ${layoutRoads.length} calles`;
 }
 
 function updateRoadEditorPanel() {
@@ -2024,6 +2265,11 @@ function updateRoadEditorPanel() {
     } else {
       output.textContent = key === "rotation" ? `${road[key]}°` : road[key].toFixed(2);
     }
+  });
+  editor.querySelectorAll("[data-road-color]").forEach((button) => {
+    const active = !!road && (road.color || "asphalt") === button.dataset.roadColor;
+    button.classList.toggle("is-active", active);
+    button.disabled = !road;
   });
 }
 
@@ -2552,7 +2798,10 @@ function pinLabel(zone) {
   el.style.setProperty("--stem", `${zone.stem || 82}px`);
   el.innerHTML = `<span class="icon">${zone.icon}</span><span class="copy"><strong>${zone.name}</strong><span>${zone.coords}</span></span>`;
   labelLayer.appendChild(el);
-  el.addEventListener("click", () => setActive(zone.id));
+  el.addEventListener("click", () => {
+    setActive(zone.id);
+    focusCameraOnZone(zone.id);
+  });
   labels.push({ ...zone, element: el, world: new THREE.Vector3(zone.x, zone.y || 1.5, zone.z) });
   const position = zonePositionValues.get(zone.id);
   if (position) {
@@ -2576,6 +2825,152 @@ function projectLabels() {
     label.element.style.left = `${x}px`;
     label.element.style.top = `${y}px`;
   });
+}
+
+function createCinematicFocusHud() {
+  if (cinematicFocusHud || !citySection) return cinematicFocusHud;
+  cinematicFocusHud = document.createElement("aside");
+  cinematicFocusHud.className = "cinematic-zone-hud";
+  cinematicFocusHud.innerHTML = `
+    <span>Distrito activo</span>
+    <strong>Plaza Central</strong>
+    <p>Centro de experiencias, rutas y recompensas de Nike City.</p>
+    <button type="button">Explorar plaza</button>
+  `;
+  citySection.appendChild(cinematicFocusHud);
+  return cinematicFocusHud;
+}
+
+function createCinematicFocusGlow() {
+  if (cinematicFocusGlow) return cinematicFocusGlow;
+  const glow = new THREE.Group();
+  glow.name = "plaza_central_cinematic_glow";
+  const disk = new THREE.Mesh(
+    new THREE.CircleGeometry(3.35, 96),
+    new THREE.MeshBasicMaterial({
+      color: 0xf7bd00,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false
+    })
+  );
+  disk.rotation.x = -Math.PI / 2;
+  disk.position.y = 0.042;
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(2.45, 3.18, 96),
+    new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false
+    })
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.048;
+  glow.add(disk, ring);
+  glow.userData.disk = disk;
+  glow.userData.ring = ring;
+  glow.visible = false;
+  scene.add(glow);
+  cinematicFocusGlow = glow;
+  return glow;
+}
+
+function setCameraPose(pose) {
+  camera.position.set(pose.x, pose.y, pose.z);
+  controls.target.set(pose.tx, pose.ty, pose.tz);
+  camera.zoom = pose.zoom;
+  camera.updateProjectionMatrix();
+  controls.update();
+  projectLabels();
+}
+
+function resetCinematicFocus() {
+  citySection?.classList.remove("is-cinematic-focus");
+  if (cinematicFocusHud) gsap.to(cinematicFocusHud, { autoAlpha: 0, y: 18, duration: 0.28, ease: "power3.out" });
+  if (cinematicFocusGlow) {
+    gsap.killTweensOf([cinematicFocusGlow.scale, cinematicFocusGlow.userData.disk?.material, cinematicFocusGlow.userData.ring?.material]);
+    cinematicFocusGlow.visible = false;
+  }
+}
+
+function focusCameraOnZone(id) {
+  if (id !== "central" || !camera || !controls) {
+    resetCinematicFocus();
+    return;
+  }
+  const position = zonePositionValues.get(id);
+  if (!position) return;
+  const hud = createCinematicFocusHud();
+  const glow = createCinematicFocusGlow();
+  const disk = glow.userData.disk;
+  const ring = glow.userData.ring;
+  const focus = { x: position.x, y: 0.72, z: position.z };
+  const pose = {
+    x: camera.position.x,
+    y: camera.position.y,
+    z: camera.position.z,
+    tx: controls.target.x,
+    ty: controls.target.y,
+    tz: controls.target.z,
+    zoom: camera.zoom
+  };
+  const updatePose = () => setCameraPose(pose);
+
+  cinematicFocusTl?.kill();
+  gsap.killTweensOf([pose, glow.scale, disk.material, ring.material, hud]);
+  citySection?.classList.add("is-cinematic-focus");
+  glow.position.set(focus.x, 0.05, focus.z);
+  glow.scale.setScalar(0.78);
+  glow.visible = true;
+  disk.material.opacity = 0;
+  ring.material.opacity = 0;
+  gsap.set(hud, { autoAlpha: 0, y: 18 });
+
+  cinematicFocusTl = gsap.timeline({
+    defaults: { overwrite: true },
+    onUpdate: updatePose,
+    onComplete: () => {
+      setCameraPose(pose);
+    }
+  });
+
+  cinematicFocusTl
+    .to(disk.material, { opacity: 0.13, duration: 0.42, ease: "power3.out" }, 0)
+    .to(ring.material, { opacity: 0.58, duration: 0.42, ease: "power3.out" }, 0.04)
+    .to(glow.scale, { x: 1.12, y: 1.12, z: 1.12, duration: 1.18, ease: "power3.out" }, 0)
+    .to(pose, {
+      x: focus.x + 11.2,
+      y: focus.y + 12.6,
+      z: focus.z + 10.4,
+      tx: focus.x + 2.35,
+      ty: focus.y + 0.05,
+      tz: focus.z - 0.35,
+      zoom: 0.88,
+      duration: 1.55,
+      ease: "power3.inOut"
+    }, 0.08)
+    .to(pose, {
+      x: focus.x + 7.35,
+      y: focus.y + 8.15,
+      z: focus.z + 6.95,
+      tx: focus.x,
+      ty: focus.y,
+      tz: focus.z,
+      zoom: 2.58,
+      duration: 0.88,
+      ease: "power4.out"
+    }, ">-0.05")
+    .to(pose, {
+      x: focus.x + 7.75,
+      y: focus.y + 8.55,
+      z: focus.z + 7.25,
+      zoom: 2.35,
+      duration: 0.58,
+      ease: "power3.inOut"
+    }, ">-0.04")
+    .to(ring.material, { opacity: 0.78, duration: 0.28, yoyo: true, repeat: 1, ease: "power3.out" }, ">-0.32")
+    .to(hud, { autoAlpha: 1, y: 0, duration: 0.5, ease: "power4.out" }, ">-0.12");
 }
 
 function setActive(id) {
@@ -2604,18 +2999,20 @@ function buildCity() {
   ground.receiveShadow = true;
   scene.add(ground);
 
-const grid = new THREE.GridHelper(44, 44, 0xebd88c, 0xebd88c);
-  grid.material.opacity = 0.45;
-  grid.material.transparent = true;
-  grid.position.y = 0.01;
-  scene.add(grid);
+  if (SHOW_FLOOR_GRID) {
+    const grid = new THREE.GridHelper(44, 44, 0xebd88c, 0xebd88c);
+    grid.material.opacity = 0.45;
+    grid.material.transparent = true;
+    grid.position.y = 0.01;
+    scene.add(grid);
 
-  const technicalGrid = new THREE.GridHelper(TECH_GRID_SIZE, TECH_GRID_DIVISIONS, 0xf1c84a, 0xf1c84a);
-  technicalGrid.name = "technical_snap_grid";
-  technicalGrid.material.opacity = 0.22;
-  technicalGrid.material.transparent = true;
-  technicalGrid.position.y = 0.018;
-  scene.add(technicalGrid);
+    const technicalGrid = new THREE.GridHelper(TECH_GRID_SIZE, TECH_GRID_DIVISIONS, 0xf1c84a, 0xf1c84a);
+    technicalGrid.name = "technical_snap_grid";
+    technicalGrid.material.opacity = 0.22;
+    technicalGrid.material.transparent = true;
+    technicalGrid.position.y = 0.018;
+    scene.add(technicalGrid);
+  }
 
   layoutIslandGroup = new THREE.Group();
   layoutIslandGroup.name = "layout_islands";
@@ -2695,6 +3092,8 @@ const grid = new THREE.GridHelper(44, 44, 0xebd88c, 0xebd88c);
       scaleX: isFiniteNumber(road.scaleX) ? road.scaleX : undefined,
       scaleZ: isFiniteNumber(road.scaleZ) ? road.scaleZ : undefined,
       rotation: isFiniteNumber(road.rotation) ? road.rotation : undefined,
+      color: ROAD_COLOR_OPTIONS[road.color] ? road.color : undefined,
+      opacity: isFiniteNumber(road.opacity) ? road.opacity : undefined,
       select: false,
       persist: false
     });
@@ -3861,6 +4260,10 @@ bootHowPageAnimations();
 bootIntroCards();
 playPageEnter();
 initSoundControls();
+window.addEventListener("beforeunload", persistEditorStateNow);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") persistEditorStateNow();
+});
 
 function animate(t) {
   if (!renderer || !controls) return;
@@ -3869,6 +4272,7 @@ function animate(t) {
   controls.update();
   updateCityAtmosphere(t);
   layoutAssetMixers.forEach((mixer) => mixer.update(delta));
+  updateAnimatedLayoutAssets(t);
   scene.traverse((obj) => {
     if (obj.userData.float) obj.position.y += Math.sin(t * 0.002 + obj.userData.float) * 0.001;
   });
