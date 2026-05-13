@@ -43,6 +43,7 @@ const JUVENIL_GLB = "assets/models/zones/zona_juvenil.glb?v=1";
 const USE_BLENDER_SKATE = true;
 const SKATE_GLB = "assets/models/zones/zona_skate.glb?v=1";
 const GENERIC_ZONE_GLB = "assets/models/zones/zona_generica.glb?v=1";
+const PROP_ASSET_BASE = "assets/models/props/";
 const SHOW_CITY_ROADS = false;
 const SHOW_LAYOUT_ISLANDS = false;
 const SHOW_CITY_ATMOSPHERE = true;
@@ -190,11 +191,25 @@ const ISLAND_TYPES = {
   plaza: { label: "Plaza", w: 1.45, d: 1.25, rot: 0 }
 };
 const ASSET_TYPES = {
-  genericZone: {
-    label: "Zona genérica",
-    url: GENERIC_ZONE_GLB,
-    scale: 1
-  }
+  genericZone: { label: "Zona genérica", category: "Urban Props", url: GENERIC_ZONE_GLB, scale: 1, y: 0.25, placement: "ground" },
+  carOrange: { label: "Auto naranja", category: "Vehicles / Ground", url: `${PROP_ASSET_BASE}car_orange.glb`, scale: 0.7, y: 0.18, placement: "road" },
+  carYellow: { label: "Auto amarillo", category: "Vehicles / Ground", url: `${PROP_ASSET_BASE}car_yellow.glb`, scale: 0.7, y: 0.18, placement: "road" },
+  carWhiteBlack: { label: "Auto blanco/negro", category: "Vehicles / Ground", url: `${PROP_ASSET_BASE}car_white_black.glb`, scale: 0.7, y: 0.18, placement: "road" },
+  planeOrange: { label: "Avión naranja", category: "Vehicles / Air", url: `${PROP_ASSET_BASE}plane_orange.glb`, scale: 0.85, y: 3.2, placement: "air", animated: true },
+  helicopterOrange: { label: "Helicóptero naranja", category: "Vehicles / Air", url: `${PROP_ASSET_BASE}helicopter_orange.glb`, scale: 0.85, y: 2.9, placement: "air", animated: true },
+  personBlock: { label: "Persona quieta", category: "People", url: `${PROP_ASSET_BASE}person_block.glb`, scale: 0.58, y: 0.18, placement: "pedestrian" },
+  personWalking: { label: "Persona caminando", category: "People", url: `${PROP_ASSET_BASE}person_walking.glb`, scale: 0.58, y: 0.18, placement: "pedestrian", animated: true },
+  treeYellow: { label: "Árbol amarillo", category: "Urban Props", url: `${PROP_ASSET_BASE}prop_tree_yellow.glb`, scale: 0.82, y: 0.16, placement: "decor" },
+  treeWhite: { label: "Árbol blanco", category: "Urban Props", url: `${PROP_ASSET_BASE}prop_tree_white.glb`, scale: 0.82, y: 0.16, placement: "decor" },
+  treeCone: { label: "Árbol cónico", category: "Urban Props", url: `${PROP_ASSET_BASE}prop_tree_cone.glb`, scale: 0.82, y: 0.16, placement: "decor" },
+  umbrella: { label: "Sombrilla", category: "Urban Props", url: `${PROP_ASSET_BASE}prop_umbrella.glb`, scale: 0.78, y: 0.16, placement: "decor" },
+  lamp: { label: "Lámpara", category: "Urban Props", url: `${PROP_ASSET_BASE}prop_lamp.glb`, scale: 0.76, y: 0.16, placement: "decor" },
+  bench: { label: "Banca", category: "Urban Props", url: `${PROP_ASSET_BASE}prop_bench.glb`, scale: 0.78, y: 0.16, placement: "decor" },
+  nikeSign: { label: "Señal Nike", category: "Urban Props", url: `${PROP_ASSET_BASE}prop_nike_sign.glb`, scale: 0.78, y: 0.16, placement: "decor" },
+  nikeFlag: { label: "Bandera Nike", category: "Urban Props", url: `${PROP_ASSET_BASE}prop_flag.glb`, scale: 0.78, y: 0.16, placement: "decor" },
+  bollard: { label: "Bolardo", category: "Urban Props", url: `${PROP_ASSET_BASE}prop_bollard.glb`, scale: 0.72, y: 0.16, placement: "decor" },
+  fountain: { label: "Fuente", category: "Urban Props", url: `${PROP_ASSET_BASE}prop_fountain.glb`, scale: 0.82, y: 0.16, placement: "decor" },
+  parkingSign: { label: "Señal parking", category: "Urban Props", url: `${PROP_ASSET_BASE}prop_parking_sign.glb`, scale: 0.78, y: 0.16, placement: "decor" }
 };
 const ROAD_TYPES = {
   straight: { label: "Recta", w: 2.7, d: 0.86 },
@@ -259,6 +274,8 @@ const layoutRoads = [];
 let layoutIslandGroup = null;
 let layoutAssetGroup = null;
 let layoutRoadGroup = null;
+const layoutAssetMixers = new Map();
+let lastAnimationTime = 0;
 let selectedIslandType = null;
 let selectedIslandId = null;
 let selectedAssetType = null;
@@ -348,6 +365,7 @@ function saveLayoutState() {
 }
 
 function saveAllEditorState(button = null) {
+  selectLayoutIsland(null);
   saveLayoutState();
   saveRoadState();
   if (!button) return;
@@ -360,13 +378,30 @@ function saveAllEditorState(button = null) {
   }, 1100);
 }
 
+function groupedAssetButtons() {
+  const groups = {};
+  Object.entries(ASSET_TYPES).forEach(([id, item]) => {
+    const category = item.category || "Assets";
+    groups[category] = groups[category] || [];
+    groups[category].push([id, item]);
+  });
+  return Object.entries(groups).map(([category, items]) => `
+    <div class="asset-category">
+      <span>${category}</span>
+      <div class="asset-type-list">
+        ${items.map(([id, item]) => `<button type="button" draggable="true" data-asset-type="${id}">${item.label}</button>`).join("")}
+      </div>
+    </div>
+  `).join("");
+}
+
 function refreshLayoutState() {
   try {
     window.localStorage.removeItem(LAYOUT_STORAGE_KEY);
   } catch {
     // Nothing else to do; reload still restores the code defaults.
   }
-  window.location.href = `${window.location.pathname}?v=road-editor-07`;
+  window.location.href = `${window.location.pathname}?v=road-editor-08`;
 }
 
 function addSceneObject(object) {
@@ -837,6 +872,9 @@ function createLayoutAsset(typeId, x, z, options = {}) {
     z: Number(z.toFixed(2)),
     rotation: options.rotation ?? 0,
     scale: options.scale ?? type.scale
+    ,
+    y: options.y ?? type.y ?? 0.18,
+    flip: options.flip ?? 1
   };
   layoutAssets.push(assetData);
 
@@ -844,9 +882,9 @@ function createLayoutAsset(typeId, x, z, options = {}) {
   loader.load(type.url, (gltf) => {
     const asset = gltf.scene;
     asset.name = `asset_${typeId}`;
-    asset.position.set(assetData.x, 0.25, assetData.z);
+    asset.position.set(assetData.x, assetData.y, assetData.z);
     asset.rotation.y = THREE.MathUtils.degToRad(assetData.rotation);
-    asset.scale.setScalar(assetData.scale);
+    asset.scale.set(assetData.scale * assetData.flip, assetData.scale, assetData.scale);
     asset.userData.layoutAssetId = id;
     asset.traverse((child) => {
       child.userData.layoutAssetId = id;
@@ -854,6 +892,11 @@ function createLayoutAsset(typeId, x, z, options = {}) {
       child.castShadow = true;
       child.receiveShadow = true;
     });
+    if (gltf.animations?.length) {
+      const mixer = new THREE.AnimationMixer(asset);
+      gltf.animations.forEach((clip) => mixer.clipAction(clip).play());
+      layoutAssetMixers.set(id, mixer);
+    }
     layoutAssetGroup.add(asset);
     if (options.select !== false) selectLayoutAsset(id);
   });
@@ -887,9 +930,10 @@ function updateLayoutAsset(id, updates, persist = true) {
   Object.assign(asset, updates);
   if (object) {
     object.position.x = asset.x;
+    object.position.y = asset.y ?? ASSET_TYPES[asset.type]?.y ?? 0.18;
     object.position.z = asset.z;
     object.rotation.y = THREE.MathUtils.degToRad(asset.rotation);
-    object.scale.setScalar(asset.scale);
+    object.scale.set(asset.scale * (asset.flip ?? 1), asset.scale, asset.scale);
   }
   updateAssetEditorPanel();
   updateAssetLayoutPanel();
@@ -902,12 +946,52 @@ function deleteSelectedAsset() {
   if (object) {
     layoutAssetGroup.remove(object);
   }
+  layoutAssetMixers.delete(selectedAssetId);
   const index = layoutAssets.findIndex((asset) => asset.id === selectedAssetId);
   if (index >= 0) layoutAssets.splice(index, 1);
   selectedAssetId = null;
   updateAssetEditorPanel();
   updateAssetLayoutPanel();
   saveLayoutState();
+}
+
+function duplicateSelectedAsset() {
+  if (!selectedAssetId) return;
+  const asset = getAssetData(selectedAssetId);
+  if (!asset) return;
+  createLayoutAsset(asset.type, snapToLayoutGrid(asset.x + 0.5), snapToLayoutGrid(asset.z + 0.5), {
+    rotation: asset.rotation,
+    scale: asset.scale,
+    y: asset.y,
+    flip: asset.flip,
+    select: true
+  });
+}
+
+function setAssetStatus(message) {
+  const status = document.querySelector(".asset-builder-status");
+  if (status) status.textContent = message;
+}
+
+function canPlaceAssetType(typeId, event) {
+  const type = ASSET_TYPES[typeId];
+  if (!type) return false;
+  if (type.placement === "road" && !getRoadHit(event)) {
+    setAssetStatus(`${type.label}: colócalo sobre una calle.`);
+    return false;
+  }
+  return true;
+}
+
+function createAssetFromEvent(typeId, event) {
+  if (!canPlaceAssetType(typeId, event)) return null;
+  const point = getLayoutPlanePoint(event);
+  if (!point) return null;
+  return createLayoutAsset(
+    typeId,
+    snapToLayoutGrid(point.x),
+    snapToLayoutGrid(point.z)
+  );
 }
 
 function isRoadMarkingType(typeId) {
@@ -1154,6 +1238,7 @@ function setupZoneRotationPanel() {
 
   const editorStack = document.createElement("div");
   editorStack.className = "editor-panel-stack";
+  let assetPanel = null;
   let roadPanel = null;
   let savePanel = null;
 
@@ -1185,16 +1270,17 @@ function setupZoneRotationPanel() {
     </div>
     <div class="asset-builder">
       <strong>Assets</strong>
-      <div class="asset-type-list">
-        ${Object.entries(ASSET_TYPES).map(([id, item]) => `<button type="button" data-asset-type="${id}">${item.label}</button>`).join("")}
-      </div>
+      <div class="asset-categories">${groupedAssetButtons()}</div>
       <small class="asset-builder-status">Selecciona un asset y haz click en el mapa.</small>
       <small class="asset-count">0 assets colocados</small>
       <div class="asset-editor is-empty">
         <span class="tool-subtitle">Asset seleccionado</span>
         <small class="asset-editor-empty">Haz click en un asset para editarlo.</small>
         <label>Escala <input type="range" min="0.35" max="2.8" step="0.05" data-asset-edit="scale"><output data-asset-output="scale">0</output></label>
+        <label>Altura <input type="range" min="0.1" max="4.2" step="0.05" data-asset-edit="y"><output data-asset-output="y">0</output></label>
         <label>Giro <input type="range" min="-180" max="180" step="1" data-asset-edit="rotation"><output data-asset-output="rotation">0°</output></label>
+        <label>Flip <input type="range" min="-1" max="1" step="2" data-asset-edit="flip"><output data-asset-output="flip">Normal</output></label>
+        <button class="duplicate-asset" type="button">Duplicar asset</button>
         <button class="delete-asset" type="button">Borrar asset</button>
       </div>
     </div>
@@ -1235,12 +1321,12 @@ function setupZoneRotationPanel() {
   const setEditorPanelCollapsed = (targetPanel, collapsed) => {
     if (!targetPanel) return;
     targetPanel.classList.toggle("is-collapsed", collapsed);
-    const toggle = targetPanel.querySelector(".layout-panel-toggle, .road-panel-toggle, .save-panel-toggle");
+    const toggle = targetPanel.querySelector(".layout-panel-toggle, .road-panel-toggle, .asset-panel-toggle, .save-panel-toggle");
     if (toggle) toggle.textContent = collapsed ? "+" : "−";
   };
 
   const openEditorPanel = (targetPanel) => {
-    [panel, roadPanel, savePanel].forEach((item) => {
+    [panel, roadPanel, assetPanel, savePanel].forEach((item) => {
       setEditorPanelCollapsed(item, item !== targetPanel);
     });
   };
@@ -1326,6 +1412,11 @@ function setupZoneRotationPanel() {
           : "Selecciona un asset y haz click en el mapa.";
       }
     });
+    button.addEventListener("dragstart", (event) => {
+      event.dataTransfer?.setData("text/plain", button.dataset.assetType);
+      event.dataTransfer?.setData("application/x-nike-city-asset", button.dataset.assetType);
+      event.dataTransfer.effectAllowed = "copy";
+    });
   });
 
   const setRoadCreationType = (typeId) => {
@@ -1373,6 +1464,7 @@ function setupZoneRotationPanel() {
   });
 
   panel.querySelector(".delete-asset").addEventListener("click", deleteSelectedAsset);
+  panel.querySelector(".duplicate-asset").addEventListener("click", duplicateSelectedAsset);
 
   panel.querySelectorAll("[data-road-edit]").forEach((input) => {
     input.addEventListener("input", () => {
@@ -1463,6 +1555,38 @@ function setupZoneRotationPanel() {
       }
     });
     editorStack.appendChild(roadPanel);
+  }
+  const assetBuilder = panel.querySelector(".asset-builder");
+  if (assetBuilder) {
+    assetPanel = document.createElement("aside");
+    assetPanel.className = "asset-tools-panel is-collapsed";
+    assetPanel.innerHTML = `
+      <div class="rotation-panel-head">
+        <strong>Assets</strong>
+        <span>Props GLB</span>
+        <button class="asset-panel-toggle" type="button" aria-label="Mostrar assets">+</button>
+      </div>
+      <div class="asset-panel-body"></div>
+    `;
+    assetPanel.querySelector(".asset-panel-body").appendChild(assetBuilder);
+    assetPanel.addEventListener("pointerdown", (event) => {
+      event.stopPropagation();
+      if (controls) controls.enabled = false;
+    });
+    assetPanel.addEventListener("pointerup", () => {
+      if (controls) controls.enabled = true;
+    });
+    assetPanel.addEventListener("pointerleave", () => {
+      if (controls) controls.enabled = true;
+    });
+    assetPanel.querySelector(".asset-panel-toggle").addEventListener("click", () => {
+      if (assetPanel.classList.contains("is-collapsed")) {
+        openEditorPanel(assetPanel);
+      } else {
+        setEditorPanelCollapsed(assetPanel, true);
+      }
+    });
+    editorStack.appendChild(assetPanel);
   }
   savePanel = document.createElement("aside");
   savePanel.className = "editor-save-panel is-collapsed";
@@ -1561,9 +1685,13 @@ function updateAssetEditorPanel() {
   editor.querySelectorAll("[data-asset-output]").forEach((output) => {
     const key = output.dataset.assetOutput;
     if (!asset) {
-      output.textContent = key === "rotation" ? "0°" : "0";
+      output.textContent = key === "rotation" ? "0°" : key === "flip" ? "Normal" : "0";
     } else {
-      output.textContent = key === "rotation" ? `${asset[key]}°` : asset[key].toFixed(2);
+      output.textContent = key === "rotation"
+        ? `${asset[key]}°`
+        : key === "flip"
+          ? (asset[key] < 0 ? "Invertido" : "Normal")
+          : asset[key].toFixed(2);
     }
   });
 }
@@ -2238,6 +2366,8 @@ function buildCity() {
     createLayoutAsset(asset.type, asset.x, asset.z, {
       id: asset.id,
       scale: isFiniteNumber(asset.scale) ? asset.scale : undefined,
+      y: isFiniteNumber(asset.y) ? asset.y : undefined,
+      flip: isFiniteNumber(asset.flip) ? asset.flip : undefined,
       rotation: isFiniteNumber(asset.rotation) ? asset.rotation : undefined,
       select: false,
       persist: false
@@ -2503,6 +2633,14 @@ function startZoneDrag(event) {
     startScenePan(event);
     return;
   }
+  if (selectedAssetType) {
+    const created = createAssetFromEvent(selectedAssetType, event);
+    if (created) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    return;
+  }
   const roadHit = getRoadHit(event);
   if (roadHit?.object) {
     draggedRoadId = roadHit.id;
@@ -2563,19 +2701,6 @@ function startZoneDrag(event) {
         selectedRoadType,
         snapped.x,
         snapped.z
-      );
-      event.preventDefault();
-      event.stopPropagation();
-    }
-    return;
-  }
-  if (selectedAssetType) {
-    const point = getLayoutPlanePoint(event);
-    if (point) {
-      createLayoutAsset(
-        selectedAssetType,
-        snapToLayoutGrid(point.x),
-        snapToLayoutGrid(point.z)
       );
       event.preventDefault();
       event.stopPropagation();
@@ -2711,6 +2836,16 @@ if (canvas) {
   canvas.addEventListener("pointerup", endZoneDrag, { capture: true });
   canvas.addEventListener("pointercancel", endZoneDrag, { capture: true });
   canvas.addEventListener("click", pick);
+  canvas.addEventListener("dragover", (event) => {
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+  });
+  canvas.addEventListener("drop", (event) => {
+    const typeId = event.dataTransfer?.getData("application/x-nike-city-asset") || event.dataTransfer?.getData("text/plain");
+    if (!ASSET_TYPES[typeId]) return;
+    createAssetFromEvent(typeId, event);
+    event.preventDefault();
+  });
 }
 
 function bootHomeAnimations() {
@@ -3381,8 +3516,11 @@ initSoundControls();
 
 function animate(t) {
   if (!renderer || !controls) return;
+  const delta = lastAnimationTime ? (t - lastAnimationTime) / 1000 : 0;
+  lastAnimationTime = t;
   controls.update();
   updateCityAtmosphere(t);
+  layoutAssetMixers.forEach((mixer) => mixer.update(delta));
   scene.traverse((obj) => {
     if (obj.userData.float) obj.position.y += Math.sin(t * 0.002 + obj.userData.float) * 0.001;
   });

@@ -1607,6 +1607,7 @@ body.is-layout-panning #city {
 
 .zone-rotation-panel,
 .road-tools-panel,
+.asset-tools-panel,
 .editor-save-panel {
   position: relative;
   width: 100%;
@@ -1621,6 +1622,7 @@ body.is-layout-panning #city {
 
 .zone-rotation-panel,
 .road-tools-panel,
+.asset-tools-panel,
 .editor-save-panel {
   max-height: calc(100vh - 172px);
   overflow: auto;
@@ -1655,6 +1657,7 @@ body.is-layout-panning #city {
 
 .layout-panel-toggle,
 .road-panel-toggle,
+.asset-panel-toggle,
 .save-panel-toggle {
   display: grid;
   place-items: center;
@@ -1680,6 +1683,7 @@ body.is-layout-panning #city {
 
 .zone-rotation-panel.is-collapsed,
 .road-tools-panel.is-collapsed,
+.asset-tools-panel.is-collapsed,
 .editor-save-panel.is-collapsed {
   max-height: none;
   overflow: visible;
@@ -1693,6 +1697,7 @@ body.is-layout-panning #city {
 .zone-rotation-panel.is-collapsed .zone-base-builder,
 .zone-rotation-panel.is-collapsed .layout-actions,
 .road-tools-panel.is-collapsed .road-builder,
+.asset-tools-panel.is-collapsed .asset-builder,
 .editor-save-panel.is-collapsed .save-panel-body {
   display: none;
 }
@@ -1754,6 +1759,26 @@ body.is-layout-panning #city {
 .road-builder > strong {
   color: #111;
   font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.island-type-list,
+.asset-categories,
+.asset-category,
+.asset-type-list,
+.road-type-list {
+  display: grid;
+  gap: 7px;
+}
+
+.asset-category {
+  gap: 6px;
+}
+
+.asset-category > span {
+  color: rgba(17, 17, 17, 0.56);
+  font-size: 9px;
   font-weight: 900;
   text-transform: uppercase;
 }
@@ -1854,6 +1879,7 @@ body.is-layout-panning #city {
 .island-editor.is-empty label,
 .island-editor.is-empty .delete-island,
 .asset-editor.is-empty label,
+.asset-editor.is-empty .duplicate-asset,
 .asset-editor.is-empty .delete-asset,
 .road-editor.is-empty label,
 .road-editor.is-empty .delete-road {
@@ -1869,6 +1895,7 @@ body.is-layout-panning #city {
 
 .delete-island,
 .delete-asset,
+.duplicate-asset,
 .delete-road {
   height: 32px;
   border: 2px solid #111;
@@ -1883,6 +1910,7 @@ body.is-layout-panning #city {
 
 .delete-island:hover,
 .delete-asset:hover,
+.duplicate-asset:hover,
 .delete-road:hover {
   background: #111;
   color: var(--yellow);
