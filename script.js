@@ -26,6 +26,26 @@ const TRANSICION_HOME_CIUDAD = {
 };
 const USE_BLENDER_PLAZA_CENTRAL = true;
 const PLAZA_CENTRAL_GLB = "assets/zona_plaza_central_ultra_blender.glb";
+const USE_BLENDER_ESTACIONAMIENTO = true;
+const ESTACIONAMIENTO_GLB = "assets/models/zones/zona_estacionamiento.glb?v=2";
+const USE_BLENDER_METRO = true;
+const METRO_GLB = "assets/models/zones/zona_metro.glb";
+const USE_BLENDER_RUNNING = true;
+const RUNNING_GLB = "assets/models/zones/zona_running.glb";
+const USE_BLENDER_SOCCER = true;
+const SOCCER_GLB = "assets/models/zones/zona_soccer.glb";
+const USE_BLENDER_BASKETBALL = true;
+const BASKETBALL_GLB = "assets/models/zones/zona_basketball.glb?v=1";
+const USE_BLENDER_CASUAL = true;
+const CASUAL_GLB = "assets/models/zones/zona_casual.glb?v=1";
+const USE_BLENDER_JUVENIL = true;
+const JUVENIL_GLB = "assets/models/zones/zona_juvenil.glb?v=1";
+const USE_BLENDER_SKATE = true;
+const SKATE_GLB = "assets/models/zones/zona_skate.glb?v=1";
+const GENERIC_ZONE_GLB = "assets/models/zones/zona_generica.glb?v=1";
+const SHOW_CITY_ROADS = false;
+const SHOW_LAYOUT_ISLANDS = false;
+const SHOW_CITY_ATMOSPHERE = true;
 const MORPH_PATHS = {
   below: "M0 126 C16 113 32 141 50 126 C68 111 84 141 100 126 L100 176 C82 164 68 182 50 168 C32 154 18 182 0 168 Z",
   blackCover: "M0 -52 C14 -32 28 -68 46 -48 C62 -30 78 -70 100 -42 L100 176 C82 164 68 182 50 168 C32 154 18 182 0 168 Z",
@@ -114,9 +134,9 @@ if (controls) {
   controls.enableZoom = true;
   controls.rotateSpeed = 0.55;
   controls.panSpeed = 0.75;
-  controls.zoomSpeed = 0.8;
-  controls.minZoom = 0.62;
-  controls.maxZoom = 2.1;
+  controls.zoomSpeed = 1.05;
+  controls.minZoom = 0.45;
+  controls.maxZoom = 5.8;
   controls.minPolarAngle = Math.PI * 0.18;
   controls.maxPolarAngle = Math.PI * 0.46;
   controls.target.set(0, 0.25, 0);
@@ -146,11 +166,341 @@ const mats = {
   grey: new THREE.MeshStandardMaterial({ color: COLORS.grey, roughness: 0.75 }),
   glass: new THREE.MeshStandardMaterial({ color: COLORS.glass, roughness: 0.38, metalness: 0.1 }),
   line: new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.78 }),
-  grass: new THREE.MeshStandardMaterial({ color: 0xe7e4db, roughness: 0.85 })
+  grass: new THREE.MeshStandardMaterial({ color: 0xe7e4db, roughness: 0.85 }),
+  layoutIsland: new THREE.MeshStandardMaterial({ color: 0xd8d6cf, roughness: 0.82 }),
+  layoutIslandActive: new THREE.MeshStandardMaterial({ color: 0xf3c300, roughness: 0.62 }),
+  zoneBaseHelper: new THREE.MeshStandardMaterial({ color: 0xe7e4dc, roughness: 0.86 }),
+  roadOrange: new THREE.MeshStandardMaterial({ color: 0xf7bd00, roughness: 0.48 }),
+  roadSelected: new THREE.MeshStandardMaterial({ color: 0x4a4d50, roughness: 0.62 })
 };
 
 const clickables = [];
 const labels = [];
+const zoneRotatables = new Map();
+const zoneRotationValues = new Map();
+const zonePositionValues = new Map();
+const zoneLabelOffsets = new Map();
+let activeZoneGroup = null;
+const LAYOUT_SNAP = 0.25;
+const ROAD_MAGNET_SNAP = 0.18;
+const ISLAND_TYPES = {
+  small: { label: "Isla S", w: 1.1, d: 0.82, rot: 0 },
+  long: { label: "Isla larga", w: 1.85, d: 0.84, rot: 0 },
+  diagonal: { label: "Diagonal", w: 1.75, d: 0.82, rot: -0.58 },
+  plaza: { label: "Plaza", w: 1.45, d: 1.25, rot: 0 }
+};
+const ASSET_TYPES = {
+  genericZone: {
+    label: "Zona genérica",
+    url: GENERIC_ZONE_GLB,
+    scale: 1
+  }
+};
+const ROAD_TYPES = {
+  straight: { label: "Recta", w: 2.7, d: 0.86 },
+  wide: { label: "Recta ancha", w: 3.2, d: 1.18 },
+  curve: { label: "Curva L", w: 2.2, d: 2.2 },
+  t: { label: "Calle T", w: 2.7, d: 2.2 },
+  cross: { label: "Cruce +", w: 2.7, d: 2.7 },
+  crosswalkWhite: { label: "Peatonal blanca", w: 1.15, d: 0.8 },
+  crosswalkOrange: { label: "Peatonal naranja", w: 1.15, d: 0.8 },
+  laneWhite: { label: "Linea blanca", w: 2.2, d: 0.16 },
+  laneOrange: { label: "Linea naranja", w: 2.2, d: 0.16 }
+};
+const ZONE_BASE_DEFAULTS = {
+  soccer: { w: 5.05, d: 3.38 },
+  running: { w: 4.45, d: 3.15 },
+  basketball: { w: 3.9, d: 2.68 },
+  juvenil: { w: 4.4, d: 3.22 },
+  central: { w: 4.05, d: 3.25 },
+  casual: { w: 3.7, d: 2.52 },
+  skate: { w: 4.3, d: 2.4 },
+  metro: { w: 3.1, d: 2.25 },
+  parking: { w: 3.7, d: 2.6 }
+};
+const DEFAULT_LAYOUT_STATE = {
+  zones: {
+    soccer: { x: -0.75, z: -9.25, rotation: -81 },
+    running: { x: -5.5, z: -4, rotation: -38 },
+    basketball: { x: 4.5, z: -4.5, rotation: -38 },
+    juvenil: { x: -6.5, z: 2, rotation: -38 },
+    central: { x: 0.5, z: 1, rotation: -38 },
+    casual: { x: 9, z: 2.5, rotation: -38 },
+    skate: { x: -5.25, z: 8.25, rotation: -38 },
+    metro: { x: 1.5, z: 8.75, rotation: 0 },
+    parking: { x: 6.25, z: 6, rotation: -38 }
+  },
+  bases: {
+    soccer: { w: 1.8, d: 1.4 },
+    running: { w: 4.45, d: 3.15 },
+    basketball: { w: 3.9, d: 2.68 },
+    juvenil: { w: 4.4, d: 3.22 },
+    central: { w: 4.05, d: 3.25 },
+    casual: { w: 3.7, d: 2.52 },
+    skate: { w: 4.3, d: 2.4 },
+    metro: { w: 3.1, d: 2.25 },
+    parking: { w: 3.7, d: 2.6 }
+  },
+  islands: [
+    { id: "island_3", type: "diagonal", x: -2.5, z: -1.5, w: 4, d: 0.82, rotation: -127 },
+    { id: "island_5", type: "long", x: 3.25, z: 3, w: 3.85, d: 0.84, rotation: -130 },
+    { id: "island_6", type: "long", x: 2.5, z: -2, w: 4, d: 0.75, rotation: -37 },
+    { id: "island_8", type: "long", x: 7.5, z: -2.25, w: 3.65, d: 0.7, rotation: 52 },
+    { id: "island_9", type: "small", x: -0.25, z: -5, w: 3.1, d: 1.25, rotation: 9 }
+  ],
+  assets: [
+    { id: "asset_1", type: "genericZone", x: -2, z: 5.5, rotation: 52, scale: 1.05 },
+    { id: "asset_5", type: "genericZone", x: 10.75, z: -0.75, rotation: -39, scale: 1 }
+  ]
+};
+const layoutIslands = [];
+const layoutAssets = [];
+const layoutRoads = [];
+let layoutIslandGroup = null;
+let layoutAssetGroup = null;
+let layoutRoadGroup = null;
+let selectedIslandType = null;
+let selectedIslandId = null;
+let selectedAssetType = null;
+let selectedAssetId = null;
+let selectedRoadType = null;
+let selectedRoadId = null;
+let islandIdCounter = 0;
+let assetIdCounter = 0;
+let roadIdCounter = 0;
+let draggedIslandId = null;
+let draggedAssetId = null;
+let draggedRoadId = null;
+const zoneBaseHelpers = new Map();
+const zoneBaseValues = new Map();
+const LAYOUT_STORAGE_KEY = "nike-city-layout-editor-v2";
+const ROAD_STORAGE_KEY = "nike-city-road-editor-v2";
+const SOUND_STORAGE_KEY = "nike-city-sound-enabled";
+const savedLayoutState = loadLayoutState() || DEFAULT_LAYOUT_STATE;
+const savedRoadState = loadRoadState();
+const atmosphereObjects = [];
+let atmosphereGroup = null;
+let audioContext = null;
+let musicTimer = null;
+let masterGain = null;
+let musicStep = 0;
+let musicEnabled = window.localStorage.getItem(SOUND_STORAGE_KEY) !== "off";
+
+function isFiniteNumber(value) {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function loadLayoutState() {
+  try {
+    const raw = window.localStorage.getItem(LAYOUT_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function loadRoadState() {
+  try {
+    const raw = window.localStorage.getItem(ROAD_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function getRoadState() {
+  return {
+    roads: layoutRoads
+  };
+}
+
+function saveRoadState() {
+  try {
+    window.localStorage.setItem(ROAD_STORAGE_KEY, JSON.stringify(getRoadState()));
+  } catch {
+    // Copying values still works if local storage is unavailable.
+  }
+}
+
+function getLayoutState() {
+  const zoneIds = Object.keys(ZONE_BASE_DEFAULTS);
+  return {
+    zones: Object.fromEntries(zoneIds.map((id) => {
+      const position = zonePositionValues.get(id) || { x: 0, z: 0 };
+      return [id, {
+        x: position.x,
+        z: position.z,
+        rotation: zoneRotationValues.get(id) ?? 0
+      }];
+    })),
+    bases: Object.fromEntries(zoneIds.map((id) => [id, zoneBaseValues.get(id) || ZONE_BASE_DEFAULTS[id]])),
+    islands: layoutIslands,
+    assets: layoutAssets
+  };
+}
+
+function saveLayoutState() {
+  try {
+    window.localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(getLayoutState()));
+  } catch {
+    // Local storage can be unavailable in strict browser modes; the copy button still works.
+  }
+}
+
+function saveAllEditorState(button = null) {
+  saveLayoutState();
+  saveRoadState();
+  if (!button) return;
+  const originalText = button.textContent;
+  button.textContent = "Guardado";
+  button.classList.add("is-saved");
+  window.setTimeout(() => {
+    button.textContent = originalText;
+    button.classList.remove("is-saved");
+  }, 1100);
+}
+
+function refreshLayoutState() {
+  try {
+    window.localStorage.removeItem(LAYOUT_STORAGE_KEY);
+  } catch {
+    // Nothing else to do; reload still restores the code defaults.
+  }
+  window.location.href = `${window.location.pathname}?v=road-editor-07`;
+}
+
+function addSceneObject(object) {
+  (activeZoneGroup || scene).add(object);
+  return object;
+}
+
+function registerZoneRoot(id, root) {
+  zoneRotatables.set(id, root);
+  root.userData.zoneRootId = id;
+  root.traverse?.((child) => {
+    child.userData.zoneRootId = id;
+  });
+  if (zonePositionValues.has(id)) {
+    const position = zonePositionValues.get(id);
+    root.position.x = position.x;
+    root.position.z = position.z;
+  }
+  if (zoneRotationValues.has(id)) {
+    root.rotation.y = THREE.MathUtils.degToRad(zoneRotationValues.get(id));
+  }
+  return root;
+}
+
+function setZoneRotation(id, degrees) {
+  zoneRotationValues.set(id, degrees);
+  const root = zoneRotatables.get(id);
+  if (root) {
+    root.rotation.y = THREE.MathUtils.degToRad(degrees);
+  }
+  const helper = zoneBaseHelpers.get(id);
+  if (helper) {
+    helper.rotation.y = THREE.MathUtils.degToRad(degrees);
+  }
+  saveLayoutState();
+}
+
+function setZonePosition(id, x, z) {
+  const position = {
+    x: Number(x.toFixed(2)),
+    z: Number(z.toFixed(2))
+  };
+  zonePositionValues.set(id, position);
+  const root = zoneRotatables.get(id);
+  if (root) {
+    root.position.x = position.x;
+    root.position.z = position.z;
+  }
+  const helper = zoneBaseHelpers.get(id);
+  if (helper) {
+    helper.position.x = position.x;
+    helper.position.z = position.z;
+  }
+  const labelOffset = zoneLabelOffsets.get(id);
+  if (labelOffset) {
+    const label = labels.find((item) => item.id === id);
+    if (label) {
+      label.world.set(position.x + labelOffset.x, labelOffset.y, position.z + labelOffset.z);
+    }
+  }
+  updateZoneLayoutPanel(id);
+  updateZoneBasePanel(id);
+  projectLabels();
+  saveLayoutState();
+}
+
+function snapToLayoutGrid(value) {
+  return Math.round(value / LAYOUT_SNAP) * LAYOUT_SNAP;
+}
+
+function getRoadFootprint(road) {
+  const type = ROAD_TYPES[road?.type];
+  if (!type) return { w: 1, d: 1 };
+  let w = type.w * (road.scaleX ?? 1);
+  let d = type.d * (road.scaleZ ?? 1);
+  const normalized = Math.abs((((road.rotation ?? 0) % 180) + 180) % 180);
+  const isQuarterTurn = Math.abs(normalized - 90) < 16;
+  if (isQuarterTurn) {
+    [w, d] = [d, w];
+  }
+  return { w, d };
+}
+
+function snapRoadAxis(value, axis, currentRoad) {
+  const currentSize = getRoadFootprint(currentRoad)[axis === "x" ? "w" : "d"];
+  let best = snapToLayoutGrid(value);
+  let bestDistance = ROAD_MAGNET_SNAP;
+  layoutRoads.forEach((road) => {
+    if (!road || road.id === currentRoad.id) return;
+    const otherSize = getRoadFootprint(road)[axis === "x" ? "w" : "d"];
+    const otherCenter = axis === "x" ? road.x : road.z;
+    const min = otherCenter - otherSize / 2;
+    const max = otherCenter + otherSize / 2;
+    const candidates = [
+      otherCenter,
+      min + currentSize / 2,
+      max - currentSize / 2,
+      min - currentSize / 2,
+      max + currentSize / 2
+    ];
+    candidates.forEach((candidate) => {
+      const distance = Math.abs(value - candidate);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = candidate;
+      }
+    });
+  });
+  return Number(best.toFixed(2));
+}
+
+function snapRoadPosition(x, z, roadId = null, typeId = null) {
+  const road = getRoadData(roadId) || { id: roadId, type: typeId, rotation: 0, scaleX: 1, scaleZ: 1 };
+  return {
+    x: snapRoadAxis(x, "x", road),
+    z: snapRoadAxis(z, "z", road)
+  };
+}
+
+function buildRotatableZone(id, x, z, buildFn) {
+  const group = new THREE.Group();
+  group.name = id;
+  activeZoneGroup = group;
+  buildFn();
+  activeZoneGroup = null;
+  group.children.forEach((child) => {
+    child.position.x -= x;
+    child.position.z -= z;
+  });
+  group.position.set(x, 0, z);
+  registerZoneRoot(id, group);
+  scene.add(group);
+  return group;
+}
 
 function roundedShape(w, h, r) {
   const x = -w / 2;
@@ -182,7 +532,22 @@ function platform(x, z, w, d, rot = 0) {
   mesh.rotation.y = rot;
   mesh.receiveShadow = true;
   mesh.castShadow = true;
-  scene.add(mesh);
+  addSceneObject(mesh);
+  return mesh;
+}
+
+function platformHelper(w, d, h = 0.22) {
+  const geo = new THREE.ExtrudeGeometry(roundedShape(w, d, 0.35), {
+    depth: h,
+    bevelEnabled: true,
+    bevelSize: 0.04,
+    bevelThickness: 0.04,
+    bevelSegments: 4
+  });
+  geo.rotateX(-Math.PI / 2);
+  const mesh = new THREE.Mesh(geo, [mats.platform, mats.side]);
+  mesh.receiveShadow = true;
+  mesh.castShadow = true;
   return mesh;
 }
 
@@ -192,7 +557,19 @@ function box(w, h, d, mat, x, y, z, rot = 0) {
   mesh.rotation.y = rot;
   mesh.castShadow = true;
   mesh.receiveShadow = true;
-  scene.add(mesh);
+  addSceneObject(mesh);
+  return mesh;
+}
+
+function roundedSlab(w, d, h, mat, r = 0.24) {
+  const geo = new THREE.ExtrudeGeometry(roundedShape(w, d, Math.min(r, w / 2 - 0.02, d / 2 - 0.02)), {
+    depth: h,
+    bevelEnabled: false
+  });
+  geo.rotateX(-Math.PI / 2);
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.castShadow = false;
+  mesh.receiveShadow = true;
   return mesh;
 }
 
@@ -201,35 +578,1034 @@ function cyl(r, h, mat, x, y, z, segments = 32) {
   mesh.position.set(x, y + h / 2, z);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
-  scene.add(mesh);
+  addSceneObject(mesh);
   return mesh;
 }
 
-function addRoad(x, z, w, d, rot = 0) {
-  const mesh = box(w, 0.035, d, mats.road, x, 0.23, z, rot);
-  mesh.receiveShadow = true;
-  addLaneLines(x, z, w, d, rot);
-  return mesh;
+function addRoad(parent, x, z, w, d, rot = 0, options = {}) {
+  const segment = new THREE.Group();
+  segment.position.set(x, 0.045, z);
+  segment.rotation.y = rot;
+  parent.add(segment);
+
+  const road = roundedSlab(w, d, 0.035, mats.road, options.radius ?? 0.2);
+  road.name = options.name || "road_straight";
+  segment.add(road);
+
+  if (options.lanes !== false) {
+    addLaneLines(segment, w, d, options);
+  }
+
+  return segment;
 }
 
-function addLaneLines(x, z, w, d, rot) {
+function addLaneLines(parent, w, d, options = {}) {
   const count = Math.max(3, Math.floor(Math.max(w, d) / 0.9));
+  const long = w > d;
+  const dashLength = options.dashLength ?? 0.34;
+  const dashWidth = options.dashWidth ?? 0.045;
+  const y = 0.042;
   for (let i = 0; i < count; i++) {
     const offset = -Math.max(w, d) / 2 + 0.45 + i * 0.9;
-    const long = w > d;
-    const stripe = box(long ? 0.35 : 0.045, 0.012, long ? 0.035 : 0.35, mats.white, x, 0.27, z, rot);
-    const local = new THREE.Vector3(long ? offset : 0, 0, long ? 0 : offset);
-    local.applyAxisAngle(new THREE.Vector3(0, 1, 0), rot);
-    stripe.position.x += local.x;
-    stripe.position.z += local.z;
+    const stripe = new THREE.Mesh(
+      new THREE.BoxGeometry(long ? dashLength : dashWidth, 0.012, long ? dashWidth : dashLength),
+      mats.white
+    );
+    stripe.position.set(long ? offset : 0, y, long ? 0 : offset);
+    stripe.name = "dashed_lane_line";
+    parent.add(stripe);
   }
 }
 
-function addCrosswalk(x, z, rot = 0) {
+function addCrosswalk(parent, x, z, rot = 0, width = 1.05) {
+  const group = new THREE.Group();
+  group.position.set(x, 0.095, z);
+  group.rotation.y = rot;
+  group.name = "crosswalk";
+  parent.add(group);
   for (let i = -2; i <= 2; i++) {
-    const stripe = box(0.08, 0.018, 0.86, mats.white, x + i * 0.22, 0.29, z, rot);
-    stripe.rotation.y = rot;
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.014, width), mats.white);
+    stripe.position.x = i * 0.22;
+    stripe.receiveShadow = true;
+    group.add(stripe);
   }
+  return group;
+}
+
+function addCloud(parent, x, y, z, scale = 1, speed = 0.003) {
+  const group = new THREE.Group();
+  group.position.set(x, y, z);
+  group.scale.setScalar(scale);
+  group.name = "atmosphere_cloud";
+  parent.add(group);
+
+  const parts = [
+    [-0.38, 0, 0, 0.28],
+    [-0.08, 0.08, 0.02, 0.36],
+    [0.26, 0.02, -0.02, 0.3],
+    [0.48, -0.03, 0.02, 0.22]
+  ];
+  parts.forEach(([px, py, pz, radius]) => {
+    const puff = new THREE.Mesh(new THREE.SphereGeometry(radius, 18, 12), mats.white);
+    puff.position.set(px, py, pz);
+    puff.scale.y = 0.62;
+    puff.castShadow = false;
+    puff.receiveShadow = false;
+    group.add(puff);
+  });
+
+  atmosphereObjects.push({
+    object: group,
+    type: "cloud",
+    speed,
+    startX: x,
+    laneZ: z,
+    bob: Math.random() * Math.PI * 2
+  });
+  return group;
+}
+
+function addBird(parent, x, y, z, scale = 1, speed = 0.006) {
+  const group = new THREE.Group();
+  group.position.set(x, y, z);
+  group.scale.setScalar(scale);
+  group.name = "atmosphere_bird";
+  parent.add(group);
+
+  const body = new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.16, 8), mats.black);
+  body.rotation.z = Math.PI / 2;
+  group.add(body);
+
+  const wingGeo = new THREE.BoxGeometry(0.18, 0.018, 0.035);
+  const leftWing = new THREE.Mesh(wingGeo, mats.black);
+  leftWing.position.set(-0.04, 0.04, 0);
+  leftWing.rotation.z = 0.55;
+  group.add(leftWing);
+
+  const rightWing = new THREE.Mesh(wingGeo, mats.black);
+  rightWing.position.set(-0.04, -0.04, 0);
+  rightWing.rotation.z = -0.55;
+  group.add(rightWing);
+
+  atmosphereObjects.push({
+    object: group,
+    type: "bird",
+    speed,
+    startX: x,
+    laneZ: z,
+    bob: Math.random() * Math.PI * 2,
+    wings: [leftWing, rightWing]
+  });
+  return group;
+}
+
+function buildCityAtmosphere() {
+  if (!SHOW_CITY_ATMOSPHERE) return;
+  atmosphereGroup = new THREE.Group();
+  atmosphereGroup.name = "nikeCityAtmosphere";
+  scene.add(atmosphereGroup);
+
+  addCloud(atmosphereGroup, -11.6, 3.4, -6.6, 1.75, 0.0032);
+  addCloud(atmosphereGroup, 1.8, 4.15, -7.4, 1.42, 0.0025);
+  addCloud(atmosphereGroup, 9.2, 3.7, -1.4, 1.58, 0.0028);
+  addCloud(atmosphereGroup, -7.8, 3.2, 5.7, 1.36, 0.0035);
+  addCloud(atmosphereGroup, 5.6, 4.0, 7.2, 1.48, 0.0026);
+  addCloud(atmosphereGroup, -4.8, 4.45, -8.8, 1.28, 0.003);
+  addCloud(atmosphereGroup, 11.4, 3.5, 3.4, 1.64, 0.0024);
+  addCloud(atmosphereGroup, -12.2, 4.05, 1.1, 1.5, 0.0031);
+  addCloud(atmosphereGroup, 0.2, 3.35, 8.9, 1.22, 0.0034);
+
+  addBird(atmosphereGroup, -9.4, 4.35, -3.1, 0.82, 0.007);
+  addBird(atmosphereGroup, -5.3, 4.7, -4.2, 0.62, 0.008);
+  addBird(atmosphereGroup, 2.5, 4.42, 2.8, 0.72, 0.0065);
+  addBird(atmosphereGroup, 7.2, 4.65, -5.2, 0.66, 0.0075);
+}
+
+function updateCityAtmosphere(time) {
+  const t = time * 0.001;
+  atmosphereObjects.forEach((item) => {
+    item.object.position.x += item.speed * (item.type === "cloud" ? 1 : 1.55);
+    item.object.position.y += Math.sin(t * (item.type === "cloud" ? 0.8 : 2.2) + item.bob) * 0.003;
+    if (item.object.position.x > 12.4) {
+      item.object.position.x = -12.4;
+      item.object.position.z = item.laneZ + (Math.random() - 0.5) * 0.9;
+    }
+    if (item.type === "bird") {
+      item.object.rotation.y = Math.sin(t * 0.7 + item.bob) * 0.12;
+      item.wings.forEach((wing, index) => {
+        const flap = Math.sin(t * 12 + item.bob) * 0.35;
+        wing.rotation.z = (index === 0 ? 0.55 : -0.55) + (index === 0 ? flap : -flap);
+      });
+    }
+  });
+}
+
+function addSmallIsland(parent, x, z, w, d, rot = 0, radius = 0.28) {
+  const island = roundedSlab(w, d, 0.075, mats.layoutIsland, radius);
+  island.position.set(x, 0.06, z);
+  island.rotation.y = rot;
+  island.name = "small_white_island";
+  parent.add(island);
+  return island;
+}
+
+function createLayoutIsland(typeId, x, z, options = {}) {
+  const type = ISLAND_TYPES[typeId];
+  if (!type || !layoutIslandGroup) return null;
+  const island = addSmallIsland(layoutIslandGroup, x, z, type.w, type.d, type.rot, 0.24);
+  const id = options.id || `island_${++islandIdCounter}`;
+  const numericId = Number(String(id).replace(/\D/g, ""));
+  if (Number.isFinite(numericId)) islandIdCounter = Math.max(islandIdCounter, numericId);
+  island.name = `layout_island_${typeId}`;
+  island.userData.layoutIslandId = id;
+  island.userData.baseW = type.w;
+  island.userData.baseD = type.d;
+  const islandData = {
+    id,
+    type: typeId,
+    x: Number(x.toFixed(2)),
+    z: Number(z.toFixed(2)),
+    w: options.w ?? type.w,
+    d: options.d ?? type.d,
+    rotation: options.rotation ?? Number(THREE.MathUtils.radToDeg(type.rot).toFixed(1))
+  };
+  layoutIslands.push(islandData);
+  updateLayoutIsland(id, islandData, false);
+  if (options.select !== false) selectLayoutIsland(id);
+  if (options.persist !== false) saveLayoutState();
+  updateIslandLayoutPanel();
+  return island;
+}
+
+function getIslandData(id) {
+  return layoutIslands.find((island) => island.id === id);
+}
+
+function getIslandMesh(id) {
+  return layoutIslandGroup?.children.find((child) => child.userData.layoutIslandId === id) || null;
+}
+
+function selectLayoutIsland(id) {
+  selectedIslandId = id;
+  layoutIslandGroup?.children.forEach((mesh) => {
+    if (!mesh.userData.layoutIslandId) return;
+    mesh.material = mesh.userData.layoutIslandId === id ? mats.layoutIslandActive : mats.layoutIsland;
+  });
+  updateIslandEditorPanel();
+}
+
+function updateLayoutIsland(id, updates, persist = true) {
+  const island = getIslandData(id);
+  const mesh = getIslandMesh(id);
+  if (!island || !mesh) return;
+  Object.assign(island, updates);
+  mesh.position.x = island.x;
+  mesh.position.z = island.z;
+  mesh.rotation.y = THREE.MathUtils.degToRad(island.rotation);
+  mesh.scale.x = island.w / mesh.userData.baseW;
+  mesh.scale.z = island.d / mesh.userData.baseD;
+  updateIslandEditorPanel();
+  updateIslandLayoutPanel();
+  if (persist) saveLayoutState();
+}
+
+function deleteSelectedIsland() {
+  if (!selectedIslandId) return;
+  const mesh = getIslandMesh(selectedIslandId);
+  if (mesh) {
+    layoutIslandGroup.remove(mesh);
+    mesh.geometry?.dispose();
+  }
+  const index = layoutIslands.findIndex((island) => island.id === selectedIslandId);
+  if (index >= 0) layoutIslands.splice(index, 1);
+  selectedIslandId = null;
+  updateIslandEditorPanel();
+  updateIslandLayoutPanel();
+  saveLayoutState();
+}
+
+function createLayoutAsset(typeId, x, z, options = {}) {
+  const type = ASSET_TYPES[typeId];
+  if (!type || !layoutAssetGroup) return null;
+  const id = options.id || `asset_${++assetIdCounter}`;
+  const numericId = Number(String(id).replace(/\D/g, ""));
+  if (Number.isFinite(numericId)) assetIdCounter = Math.max(assetIdCounter, numericId);
+  const assetData = {
+    id,
+    type: typeId,
+    x: Number(x.toFixed(2)),
+    z: Number(z.toFixed(2)),
+    rotation: options.rotation ?? 0,
+    scale: options.scale ?? type.scale
+  };
+  layoutAssets.push(assetData);
+
+  const loader = new GLTFLoader();
+  loader.load(type.url, (gltf) => {
+    const asset = gltf.scene;
+    asset.name = `asset_${typeId}`;
+    asset.position.set(assetData.x, 0.25, assetData.z);
+    asset.rotation.y = THREE.MathUtils.degToRad(assetData.rotation);
+    asset.scale.setScalar(assetData.scale);
+    asset.userData.layoutAssetId = id;
+    asset.traverse((child) => {
+      child.userData.layoutAssetId = id;
+      if (!child.isMesh) return;
+      child.castShadow = true;
+      child.receiveShadow = true;
+    });
+    layoutAssetGroup.add(asset);
+    if (options.select !== false) selectLayoutAsset(id);
+  });
+
+  if (options.select !== false) selectedAssetId = id;
+  if (options.persist !== false) saveLayoutState();
+  updateAssetLayoutPanel();
+  updateAssetEditorPanel();
+  return assetData;
+}
+
+function getAssetData(id) {
+  return layoutAssets.find((asset) => asset.id === id);
+}
+
+function getAssetObject(id) {
+  return layoutAssetGroup?.children.find((child) => child.userData.layoutAssetId === id) || null;
+}
+
+function selectLayoutAsset(id) {
+  selectedAssetId = id;
+  selectedIslandId = null;
+  selectLayoutIsland(null);
+  updateAssetEditorPanel();
+}
+
+function updateLayoutAsset(id, updates, persist = true) {
+  const asset = getAssetData(id);
+  const object = getAssetObject(id);
+  if (!asset) return;
+  Object.assign(asset, updates);
+  if (object) {
+    object.position.x = asset.x;
+    object.position.z = asset.z;
+    object.rotation.y = THREE.MathUtils.degToRad(asset.rotation);
+    object.scale.setScalar(asset.scale);
+  }
+  updateAssetEditorPanel();
+  updateAssetLayoutPanel();
+  if (persist) saveLayoutState();
+}
+
+function deleteSelectedAsset() {
+  if (!selectedAssetId) return;
+  const object = getAssetObject(selectedAssetId);
+  if (object) {
+    layoutAssetGroup.remove(object);
+  }
+  const index = layoutAssets.findIndex((asset) => asset.id === selectedAssetId);
+  if (index >= 0) layoutAssets.splice(index, 1);
+  selectedAssetId = null;
+  updateAssetEditorPanel();
+  updateAssetLayoutPanel();
+  saveLayoutState();
+}
+
+function isRoadMarkingType(typeId) {
+  return ["crosswalkWhite", "crosswalkOrange", "laneWhite", "laneOrange"].includes(typeId);
+}
+
+function addRoadBox(group, w, d, mat = mats.road, x = 0, z = 0) {
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, 0.045, d), mat);
+  mesh.position.set(x, 0.055, z);
+  mesh.receiveShadow = true;
+  group.add(mesh);
+  return mesh;
+}
+
+function buildRoadPiece(typeId) {
+  const type = ROAD_TYPES[typeId];
+  const group = new THREE.Group();
+  group.name = `road_piece_${typeId}`;
+  if (typeId === "curve") {
+    addRoadBox(group, type.w, 0.82, mats.road, 0.44, 0);
+    addRoadBox(group, 0.82, type.d, mats.road, -0.24, 0.44);
+  } else if (typeId === "t") {
+    addRoadBox(group, type.w, 0.86, mats.road, 0, 0);
+    addRoadBox(group, 0.86, type.d, mats.road, 0, 0.58);
+  } else if (typeId === "cross") {
+    addRoadBox(group, type.w, 0.86, mats.road, 0, 0);
+    addRoadBox(group, 0.86, type.d, mats.road, 0, 0);
+  } else if (typeId === "crosswalkWhite" || typeId === "crosswalkOrange") {
+    const mat = typeId === "crosswalkOrange" ? mats.roadOrange : mats.white;
+    [-0.42, -0.21, 0, 0.21, 0.42].forEach((x) => {
+      const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.018, type.d), mat);
+      stripe.position.set(x, 0.16, 0);
+      group.add(stripe);
+    });
+  } else if (typeId === "laneWhite" || typeId === "laneOrange") {
+    const mat = typeId === "laneOrange" ? mats.roadOrange : mats.white;
+    [-0.76, -0.25, 0.26, 0.77].forEach((x) => {
+      const dash = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.016, type.d), mat);
+      dash.position.set(x, 0.16, 0);
+      group.add(dash);
+    });
+  } else {
+    addRoadBox(group, type.w, type.d, mats.road, 0, 0);
+  }
+  return group;
+}
+
+function createLayoutRoad(typeId, x, z, options = {}) {
+  const type = ROAD_TYPES[typeId];
+  if (!type || !layoutRoadGroup) return null;
+  const id = options.id || `road_${++roadIdCounter}`;
+  const numericId = Number(String(id).replace(/\D/g, ""));
+  if (Number.isFinite(numericId)) roadIdCounter = Math.max(roadIdCounter, numericId);
+  const roadData = {
+    id,
+    type: typeId,
+    x: Number(x.toFixed(2)),
+    z: Number(z.toFixed(2)),
+    rotation: options.rotation ?? 0,
+    scaleX: options.scaleX ?? 1,
+    scaleZ: options.scaleZ ?? 1
+  };
+  layoutRoads.push(roadData);
+  const road = buildRoadPiece(typeId);
+  road.userData.layoutRoadId = id;
+  road.traverse((child) => {
+    child.userData.layoutRoadId = id;
+    if (child.isMesh) {
+      child.castShadow = false;
+      child.receiveShadow = true;
+    }
+  });
+  layoutRoadGroup.add(road);
+  updateLayoutRoad(id, roadData, false);
+  if (options.select !== false) selectLayoutRoad(id);
+  if (options.persist !== false) saveRoadState();
+  updateRoadLayoutPanel();
+  return roadData;
+}
+
+function getRoadData(id) {
+  return layoutRoads.find((road) => road.id === id);
+}
+
+function getRoadObject(id) {
+  return layoutRoadGroup?.children.find((child) => child.userData.layoutRoadId === id) || null;
+}
+
+function setRoadSelectionMaterial(object, selected) {
+  object?.traverse((child) => {
+    if (!child.isMesh || child.material === mats.white || child.material === mats.roadOrange) return;
+    child.material = mats.road;
+  });
+}
+
+function selectLayoutRoad(id) {
+  selectedRoadId = id;
+  selectedIslandId = null;
+  selectedAssetId = null;
+  layoutRoadGroup?.children.forEach((object) => {
+    setRoadSelectionMaterial(object, object.userData.layoutRoadId === id);
+  });
+  updateRoadEditorPanel();
+}
+
+function updateLayoutRoad(id, updates, persist = true) {
+  const road = getRoadData(id);
+  const object = getRoadObject(id);
+  if (!road) return;
+  Object.assign(road, updates);
+  if (object) {
+    object.position.set(road.x, 0, road.z);
+    object.rotation.y = THREE.MathUtils.degToRad(road.rotation);
+    object.scale.set(road.scaleX, 1, road.scaleZ);
+  }
+  updateRoadEditorPanel();
+  updateRoadLayoutPanel();
+  if (persist) saveRoadState();
+}
+
+function deleteSelectedRoad() {
+  if (!selectedRoadId) return;
+  const object = getRoadObject(selectedRoadId);
+  if (object) layoutRoadGroup.remove(object);
+  const index = layoutRoads.findIndex((road) => road.id === selectedRoadId);
+  if (index >= 0) layoutRoads.splice(index, 1);
+  selectedRoadId = null;
+  updateRoadEditorPanel();
+  updateRoadLayoutPanel();
+  saveRoadState();
+}
+
+function createZoneBaseHelper(id, x, z) {
+  const defaults = ZONE_BASE_DEFAULTS[id];
+  if (!defaults || !layoutIslandGroup) return null;
+  const helper = platformHelper(defaults.w, defaults.d, 0.22);
+  helper.position.set(x, -0.04, z);
+  helper.name = `zone_base_helper_${id}`;
+  helper.userData.baseW = defaults.w;
+  helper.userData.baseD = defaults.d;
+  helper.rotation.y = THREE.MathUtils.degToRad(zoneRotationValues.get(id) ?? 0);
+  layoutIslandGroup.add(helper);
+  zoneBaseHelpers.set(id, helper);
+  zoneBaseValues.set(id, { w: defaults.w, d: defaults.d });
+  return helper;
+}
+
+function setZoneBaseSize(id, w, d, persist = true) {
+  const helper = zoneBaseHelpers.get(id);
+  if (!helper) return;
+  const values = {
+    w: Number(w.toFixed(2)),
+    d: Number(d.toFixed(2))
+  };
+  zoneBaseValues.set(id, values);
+  helper.scale.x = values.w / helper.userData.baseW;
+  helper.scale.z = values.d / helper.userData.baseD;
+  updateZoneBasePanel(id);
+  if (persist) saveLayoutState();
+}
+
+function addRoadBetween(parent, x1, z1, x2, z2, width = 1.02, name = "road_straight") {
+  const dx = x2 - x1;
+  const dz = z2 - z1;
+  const length = Math.hypot(dx, dz);
+  const cx = (x1 + x2) / 2;
+  const cz = (z1 + z2) / 2;
+  const rot = Math.atan2(dz, dx);
+  return addRoad(parent, cx, cz, length + width * 0.12, width, rot, {
+    lanes: false,
+    radius: 0.16,
+    name
+  });
+}
+
+function addRoadNode(parent, x, z, radius = 0.56) {
+  const node = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, 0.035, 40), mats.road);
+  node.position.set(x, 0.065, z);
+  node.name = "road_turn";
+  node.receiveShadow = true;
+  parent.add(node);
+  return node;
+}
+
+function buildNikeCityRoads(zone) {
+  const roads = new THREE.Group();
+  roads.name = "nikeCityRoads";
+  scene.add(roads);
+
+  const width = 0.82;
+  const segments = [
+    [-4.45, -8.75, -2.7, -6.35, "road_soccer_left_top"],
+    [-2.7, -6.35, -2.85, -4.35, "road_soccer_left_drop"],
+    [1.45, -8.65, -0.25, -6.2, "road_soccer_right_top"],
+    [-0.25, -6.2, -0.25, -4.25, "road_soccer_right_drop"],
+
+    [-9.2, -4.35, -6.35, -2.15, "road_running_outer_top"],
+    [-6.35, -2.15, -3.55, 0.3, "road_running_outer_mid"],
+    [-3.55, 0.3, -1.65, 1.9, "road_left_to_plaza"],
+    [-2.85, -4.35, -1.3, -2.6, "road_soccer_to_plaza_left"],
+    [-0.25, -4.25, 1.35, -2.55, "road_soccer_to_plaza_right"],
+
+    [-1.65, 1.9, 0.35, -0.45, "road_plaza_diamond_left_top"],
+    [0.35, -0.45, 2.35, 1.55, "road_plaza_diamond_right_top"],
+    [2.35, 1.55, 0.85, 3.92, "road_plaza_diamond_right_bottom"],
+    [0.85, 3.92, -1.65, 1.9, "road_plaza_diamond_left_bottom"],
+
+    [-9.1, 1.8, -6.55, 3.05, "road_juvenil_entry"],
+    [-6.55, 3.05, -4.15, 4.65, "road_juvenil_skate"],
+    [-4.15, 4.65, -1.25, 6.75, "road_lower_left_main"],
+    [-1.25, 6.75, 0.05, 8.95, "road_metro_left_main"],
+    [-3.85, 8.8, -1.25, 6.75, "road_skate_to_metro"],
+
+    [2.35, 1.55, 4.9, -0.1, "road_right_upper_main"],
+    [4.9, -0.1, 7.0, -2.45, "road_basketball_outer"],
+    [4.9, -0.1, 7.25, 2.05, "road_casual_upper_entry"],
+    [7.25, 2.05, 10.25, 0.15, "road_casual_far"],
+    [2.35, 1.55, 4.55, 3.65, "road_right_lower_main"],
+    [4.55, 3.65, 6.55, 5.75, "road_parking_upper_entry"],
+    [6.55, 5.75, 8.95, 8.1, "road_parking_exit"],
+    [6.55, 5.75, 4.0, 8.55, "road_metro_right_entry"],
+    [4.0, 8.55, 3.2, 10.8, "road_metro_right_exit"]
+  ];
+
+  segments.forEach(([x1, z1, x2, z2, name]) => addRoadBetween(roads, x1, z1, x2, z2, width, name));
+
+  return roads;
+}
+
+function setupZoneRotationPanel() {
+  if (!citySection || document.querySelector(".zone-rotation-panel")) return;
+
+  const zones = [
+    ["soccer", "Soccer"],
+    ["running", "Running"],
+    ["basketball", "Basketball"],
+    ["juvenil", "Juvenil"],
+    ["central", "Plaza Central"],
+    ["casual", "Casual"],
+    ["skate", "Skate Park"],
+    ["metro", "Metro"],
+    ["parking", "Estacionamiento"]
+  ];
+
+  const editorStack = document.createElement("div");
+  editorStack.className = "editor-panel-stack";
+  let roadPanel = null;
+  let savePanel = null;
+
+  const panel = document.createElement("aside");
+  panel.className = "zone-rotation-panel is-collapsed";
+  panel.innerHTML = `
+    <div class="rotation-panel-head">
+      <strong>Layout de zonas</strong>
+      <span>Snap ${LAYOUT_SNAP}</span>
+      <button class="layout-panel-toggle" type="button" aria-label="Mostrar panel">+</button>
+    </div>
+    <p class="rotation-panel-note">Arrastra cada zona en el mapa y ajusta su giro con la barra.</p>
+    <div class="rotation-controls"></div>
+    <div class="island-builder">
+      <strong>Islas</strong>
+      <div class="island-type-list">
+        ${Object.entries(ISLAND_TYPES).map(([id, item]) => `<button type="button" data-island-type="${id}">${item.label}</button>`).join("")}
+      </div>
+      <small class="island-builder-status">Selecciona una isla y haz click en el mapa.</small>
+      <small class="island-count">0 islas colocadas</small>
+      <div class="island-editor is-empty">
+        <span class="tool-subtitle">Isla seleccionada</span>
+        <small class="island-editor-empty">Haz click en una isla para editarla.</small>
+        <label>Largo <input type="range" min="0.5" max="4" step="0.05" data-island-edit="w"><output data-island-output="w">0</output></label>
+        <label>Ancho <input type="range" min="0.5" max="4" step="0.05" data-island-edit="d"><output data-island-output="d">0</output></label>
+        <label>Giro <input type="range" min="-180" max="180" step="1" data-island-edit="rotation"><output data-island-output="rotation">0°</output></label>
+        <button class="delete-island" type="button">Borrar isla</button>
+      </div>
+    </div>
+    <div class="asset-builder">
+      <strong>Assets</strong>
+      <div class="asset-type-list">
+        ${Object.entries(ASSET_TYPES).map(([id, item]) => `<button type="button" data-asset-type="${id}">${item.label}</button>`).join("")}
+      </div>
+      <small class="asset-builder-status">Selecciona un asset y haz click en el mapa.</small>
+      <small class="asset-count">0 assets colocados</small>
+      <div class="asset-editor is-empty">
+        <span class="tool-subtitle">Asset seleccionado</span>
+        <small class="asset-editor-empty">Haz click en un asset para editarlo.</small>
+        <label>Escala <input type="range" min="0.35" max="2.8" step="0.05" data-asset-edit="scale"><output data-asset-output="scale">0</output></label>
+        <label>Giro <input type="range" min="-180" max="180" step="1" data-asset-edit="rotation"><output data-asset-output="rotation">0°</output></label>
+        <button class="delete-asset" type="button">Borrar asset</button>
+      </div>
+    </div>
+    <div class="road-builder">
+      <strong>Calles</strong>
+      <div class="road-type-list">
+        ${Object.entries(ROAD_TYPES).map(([id, item]) => `<button type="button" data-road-type="${id}">${item.label}</button>`).join("")}
+      </div>
+      <small class="road-builder-status">Selecciona una calle y haz click en el mapa.</small>
+      <small class="road-count">0 calles colocadas</small>
+      <div class="road-editor is-empty">
+        <span class="tool-subtitle">Calle seleccionada</span>
+        <small class="road-editor-empty">Haz click en una calle para editarla.</small>
+        <label>Largo <input type="range" min="0.25" max="5" step="0.05" data-road-edit="scaleX"><output data-road-output="scaleX">0</output></label>
+        <label>Ancho <input type="range" min="0.25" max="4" step="0.05" data-road-edit="scaleZ"><output data-road-output="scaleZ">0</output></label>
+        <label>Giro <input type="range" min="-180" max="180" step="1" data-road-edit="rotation"><output data-road-output="rotation">0°</output></label>
+        <button class="delete-road" type="button">Borrar calle</button>
+      </div>
+      <div class="road-actions">
+        <button class="copy-road-values" type="button">Copiar calles</button>
+        <button class="clear-road-values" type="button">Limpiar calles</button>
+      </div>
+    </div>
+    <div class="zone-base-builder">
+      <strong>Bases de zonas</strong>
+      <select class="zone-base-select" aria-label="Seleccionar zona base">
+        ${zones.map(([id, label]) => `<option value="${id}">${label}</option>`).join("")}
+      </select>
+      <label>Largo <input type="range" min="1.8" max="7" step="0.05" data-zone-base-edit="w"><output data-zone-base-output="w">0</output></label>
+      <label>Ancho <input type="range" min="1.4" max="5.2" step="0.05" data-zone-base-edit="d"><output data-zone-base-output="d">0</output></label>
+    </div>
+    <div class="layout-actions">
+      <button class="copy-rotation-values" type="button">Copiar valores</button>
+      <button class="refresh-layout-values" type="button">Refresh all</button>
+    </div>
+  `;
+
+  const setEditorPanelCollapsed = (targetPanel, collapsed) => {
+    if (!targetPanel) return;
+    targetPanel.classList.toggle("is-collapsed", collapsed);
+    const toggle = targetPanel.querySelector(".layout-panel-toggle, .road-panel-toggle, .save-panel-toggle");
+    if (toggle) toggle.textContent = collapsed ? "+" : "−";
+  };
+
+  const openEditorPanel = (targetPanel) => {
+    [panel, roadPanel, savePanel].forEach((item) => {
+      setEditorPanelCollapsed(item, item !== targetPanel);
+    });
+  };
+
+  const controlsList = panel.querySelector(".rotation-controls");
+  zones.forEach(([id, label]) => {
+    zoneRotationValues.set(id, zoneRotationValues.get(id) ?? 0);
+    const row = document.createElement("label");
+    row.className = "rotation-control";
+    row.dataset.zoneLayoutRow = id;
+    const position = zonePositionValues.get(id) || { x: 0, z: 0 };
+    row.innerHTML = `
+      <span>${label}</span>
+      <input type="range" min="-180" max="180" step="1" value="${zoneRotationValues.get(id)}" data-zone-rotation="${id}">
+      <output>${zoneRotationValues.get(id)}°</output>
+      <small data-zone-position="${id}">x ${position.x.toFixed(2)} / z ${position.z.toFixed(2)}</small>
+    `;
+    controlsList.appendChild(row);
+  });
+
+  panel.addEventListener("pointerdown", (event) => {
+    event.stopPropagation();
+    if (controls) controls.enabled = false;
+  });
+  panel.addEventListener("pointerup", () => {
+    if (controls) controls.enabled = true;
+  });
+  panel.addEventListener("pointerleave", () => {
+    if (controls) controls.enabled = true;
+  });
+
+  panel.querySelectorAll("[data-zone-rotation]").forEach((input) => {
+    input.addEventListener("input", () => {
+      const degrees = Number(input.value);
+      input.nextElementSibling.textContent = `${degrees}°`;
+      setZoneRotation(input.dataset.zoneRotation, degrees);
+    });
+  });
+
+  panel.querySelector(".layout-panel-toggle").addEventListener("click", () => {
+    if (panel.classList.contains("is-collapsed")) {
+      openEditorPanel(panel);
+    } else {
+      setEditorPanelCollapsed(panel, true);
+    }
+  });
+
+  panel.querySelectorAll("[data-island-type]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const isActive = selectedIslandType === button.dataset.islandType;
+      selectedIslandType = isActive ? null : button.dataset.islandType;
+      selectedAssetType = null;
+      selectedRoadType = null;
+      panel.querySelectorAll("[data-asset-type]").forEach((item) => item.classList.remove("is-active"));
+      panel.querySelectorAll("[data-road-type]").forEach((item) => item.classList.remove("is-active"));
+      panel.querySelectorAll("[data-island-type]").forEach((item) => {
+        item.classList.toggle("is-active", item.dataset.islandType === selectedIslandType);
+      });
+      const status = panel.querySelector(".island-builder-status");
+      if (status) {
+        status.textContent = selectedIslandType
+          ? `${ISLAND_TYPES[selectedIslandType].label}: click en el mapa para colocar.`
+          : "Selecciona una isla y haz click en el mapa.";
+      }
+    });
+  });
+
+  panel.querySelectorAll("[data-asset-type]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const isActive = selectedAssetType === button.dataset.assetType;
+      selectedAssetType = isActive ? null : button.dataset.assetType;
+      selectedIslandType = null;
+      selectedRoadType = null;
+      panel.querySelectorAll("[data-island-type]").forEach((item) => item.classList.remove("is-active"));
+      panel.querySelectorAll("[data-road-type]").forEach((item) => item.classList.remove("is-active"));
+      panel.querySelectorAll("[data-asset-type]").forEach((item) => {
+        item.classList.toggle("is-active", item.dataset.assetType === selectedAssetType);
+      });
+      const status = panel.querySelector(".asset-builder-status");
+      if (status) {
+        status.textContent = selectedAssetType
+          ? `${ASSET_TYPES[selectedAssetType].label}: click en el mapa para colocar.`
+          : "Selecciona un asset y haz click en el mapa.";
+      }
+    });
+  });
+
+  const setRoadCreationType = (typeId) => {
+    selectedRoadType = typeId;
+    selectedIslandType = null;
+    selectedAssetType = null;
+    panel.querySelectorAll("[data-island-type]").forEach((item) => item.classList.remove("is-active"));
+    panel.querySelectorAll("[data-asset-type]").forEach((item) => item.classList.remove("is-active"));
+    document.querySelectorAll("[data-road-type]").forEach((item) => {
+      item.classList.toggle("is-active", item.dataset.roadType === selectedRoadType);
+    });
+    const status = document.querySelector(".road-builder-status");
+    if (status) {
+      status.textContent = selectedRoadType
+        ? `${ROAD_TYPES[selectedRoadType].label}: click en el mapa para colocar.`
+        : "Selecciona una calle y haz click en el mapa.";
+    }
+  };
+
+  panel.querySelectorAll("[data-road-type]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const isActive = selectedRoadType === button.dataset.roadType;
+      setRoadCreationType(isActive ? null : button.dataset.roadType);
+    });
+  });
+
+  panel.querySelectorAll("[data-island-edit]").forEach((input) => {
+    input.addEventListener("input", () => {
+      if (!selectedIslandId) return;
+      const island = getIslandData(selectedIslandId);
+      if (!island) return;
+      const key = input.dataset.islandEdit;
+      updateLayoutIsland(selectedIslandId, { [key]: Number(input.value) });
+    });
+  });
+
+  panel.querySelector(".delete-island").addEventListener("click", deleteSelectedIsland);
+
+  panel.querySelectorAll("[data-asset-edit]").forEach((input) => {
+    input.addEventListener("input", () => {
+      if (!selectedAssetId) return;
+      const key = input.dataset.assetEdit;
+      updateLayoutAsset(selectedAssetId, { [key]: Number(input.value) });
+    });
+  });
+
+  panel.querySelector(".delete-asset").addEventListener("click", deleteSelectedAsset);
+
+  panel.querySelectorAll("[data-road-edit]").forEach((input) => {
+    input.addEventListener("input", () => {
+      if (!selectedRoadId) return;
+      const key = input.dataset.roadEdit;
+      updateLayoutRoad(selectedRoadId, { [key]: Number(input.value) });
+    });
+  });
+
+  panel.querySelector(".delete-road").addEventListener("click", deleteSelectedRoad);
+
+  panel.querySelector(".copy-road-values").addEventListener("click", async () => {
+    const text = JSON.stringify(getRoadState(), null, 2);
+    try {
+      await navigator.clipboard.writeText(text);
+      panel.classList.add("is-copied");
+      setTimeout(() => panel.classList.remove("is-copied"), 900);
+    } catch {
+      console.table(getRoadState());
+    }
+  });
+
+  panel.querySelector(".clear-road-values").addEventListener("click", () => {
+    layoutRoadGroup?.clear();
+    layoutRoads.splice(0, layoutRoads.length);
+    selectedRoadId = null;
+    roadIdCounter = 0;
+    saveRoadState();
+    updateRoadLayoutPanel();
+    updateRoadEditorPanel();
+  });
+
+
+  const zoneBaseSelect = panel.querySelector(".zone-base-select");
+  zoneBaseSelect.addEventListener("change", () => updateZoneBasePanel(zoneBaseSelect.value));
+  panel.querySelectorAll("[data-zone-base-edit]").forEach((input) => {
+    input.addEventListener("input", () => {
+      const id = zoneBaseSelect.value;
+      const values = zoneBaseValues.get(id) || ZONE_BASE_DEFAULTS[id];
+      const next = { ...values, [input.dataset.zoneBaseEdit]: Number(input.value) };
+      setZoneBaseSize(id, next.w, next.d);
+    });
+  });
+
+  panel.querySelector(".copy-rotation-values").addEventListener("click", async () => {
+    const text = JSON.stringify(getLayoutState(), null, 2);
+    try {
+      await navigator.clipboard.writeText(text);
+      panel.classList.add("is-copied");
+      setTimeout(() => panel.classList.remove("is-copied"), 900);
+    } catch {
+      console.table(getLayoutState());
+    }
+  });
+
+  panel.querySelector(".refresh-layout-values").addEventListener("click", refreshLayoutState);
+
+  citySection.appendChild(editorStack);
+  editorStack.appendChild(panel);
+  const roadBuilder = panel.querySelector(".road-builder");
+  if (roadBuilder) {
+    roadPanel = document.createElement("aside");
+    roadPanel.className = "road-tools-panel is-collapsed";
+    roadPanel.innerHTML = `
+      <div class="rotation-panel-head">
+        <strong>Calles</strong>
+        <span>Editor vial</span>
+        <button class="road-panel-toggle" type="button" aria-label="Mostrar calles">+</button>
+      </div>
+      <div class="road-panel-body"></div>
+    `;
+    roadPanel.querySelector(".road-panel-body").appendChild(roadBuilder);
+    roadPanel.addEventListener("pointerdown", (event) => {
+      event.stopPropagation();
+      if (controls) controls.enabled = false;
+    });
+    roadPanel.addEventListener("pointerup", () => {
+      if (controls) controls.enabled = true;
+    });
+    roadPanel.addEventListener("pointerleave", () => {
+      if (controls) controls.enabled = true;
+    });
+    roadPanel.querySelector(".road-panel-toggle").addEventListener("click", () => {
+      if (roadPanel.classList.contains("is-collapsed")) {
+        openEditorPanel(roadPanel);
+      } else {
+        setEditorPanelCollapsed(roadPanel, true);
+      }
+    });
+    editorStack.appendChild(roadPanel);
+  }
+  savePanel = document.createElement("aside");
+  savePanel.className = "editor-save-panel is-collapsed";
+  savePanel.innerHTML = `
+    <div class="rotation-panel-head">
+      <strong>Guardado</strong>
+      <span>Estado total</span>
+      <button class="save-panel-toggle" type="button" aria-label="Mostrar guardado">+</button>
+    </div>
+    <div class="save-panel-body">
+      <button class="save-all-editor-values" type="button">Guardar todo</button>
+      <small>Zonas, islas, assets y calles</small>
+    </div>
+  `;
+  savePanel.addEventListener("pointerdown", (event) => {
+    event.stopPropagation();
+    if (controls) controls.enabled = false;
+  });
+  savePanel.addEventListener("pointerup", () => {
+    if (controls) controls.enabled = true;
+  });
+  savePanel.addEventListener("pointerleave", () => {
+    if (controls) controls.enabled = true;
+  });
+  savePanel.querySelector(".save-panel-toggle").addEventListener("click", () => {
+    if (savePanel.classList.contains("is-collapsed")) {
+      openEditorPanel(savePanel);
+    } else {
+      setEditorPanelCollapsed(savePanel, true);
+    }
+  });
+  savePanel.querySelector(".save-all-editor-values").addEventListener("click", (event) => {
+    saveAllEditorState(event.currentTarget);
+  });
+  editorStack.appendChild(savePanel);
+  updateZoneBasePanel(zones[0][0]);
+  updateAssetLayoutPanel();
+  updateAssetEditorPanel();
+  updateRoadLayoutPanel();
+  updateRoadEditorPanel();
+}
+
+function updateZoneLayoutPanel(id) {
+  const position = zonePositionValues.get(id);
+  if (!position) return;
+  const output = document.querySelector(`[data-zone-position="${id}"]`);
+  if (output) {
+    output.textContent = `x ${position.x.toFixed(2)} / z ${position.z.toFixed(2)}`;
+  }
+}
+
+function updateIslandLayoutPanel() {
+  const output = document.querySelector(".island-count");
+  if (output) {
+    output.textContent = `${layoutIslands.length} ${layoutIslands.length === 1 ? "isla colocada" : "islas colocadas"}`;
+  }
+}
+
+function updateIslandEditorPanel() {
+  const editor = document.querySelector(".island-editor");
+  if (!editor) return;
+  const island = selectedIslandId ? getIslandData(selectedIslandId) : null;
+  editor.classList.toggle("is-empty", !island);
+  editor.querySelectorAll("[data-island-edit]").forEach((input) => {
+    const key = input.dataset.islandEdit;
+    input.disabled = !island;
+    if (island) input.value = island[key];
+  });
+  editor.querySelectorAll("[data-island-output]").forEach((output) => {
+    const key = output.dataset.islandOutput;
+    if (!island) {
+      output.textContent = key === "rotation" ? "0°" : "0";
+    } else {
+      output.textContent = key === "rotation" ? `${island[key]}°` : island[key].toFixed(2);
+    }
+  });
+}
+
+function updateAssetLayoutPanel() {
+  const output = document.querySelector(".asset-count");
+  if (output) {
+    output.textContent = `${layoutAssets.length} ${layoutAssets.length === 1 ? "asset colocado" : "assets colocados"}`;
+  }
+}
+
+function updateAssetEditorPanel() {
+  const editor = document.querySelector(".asset-editor");
+  if (!editor) return;
+  const asset = selectedAssetId ? getAssetData(selectedAssetId) : null;
+  editor.classList.toggle("is-empty", !asset);
+  editor.querySelectorAll("[data-asset-edit]").forEach((input) => {
+    const key = input.dataset.assetEdit;
+    input.disabled = !asset;
+    if (asset) input.value = asset[key];
+  });
+  editor.querySelectorAll("[data-asset-output]").forEach((output) => {
+    const key = output.dataset.assetOutput;
+    if (!asset) {
+      output.textContent = key === "rotation" ? "0°" : "0";
+    } else {
+      output.textContent = key === "rotation" ? `${asset[key]}°` : asset[key].toFixed(2);
+    }
+  });
+}
+
+function updateRoadLayoutPanel() {
+  const output = document.querySelector(".road-count");
+  if (output) {
+    output.textContent = `${layoutRoads.length} ${layoutRoads.length === 1 ? "calle colocada" : "calles colocadas"}`;
+  }
+}
+
+function updateRoadEditorPanel() {
+  const editor = document.querySelector(".road-editor");
+  if (!editor) return;
+  const road = selectedRoadId ? getRoadData(selectedRoadId) : null;
+  editor.classList.toggle("is-empty", !road);
+  editor.querySelectorAll("[data-road-edit]").forEach((input) => {
+    const key = input.dataset.roadEdit;
+    input.disabled = !road;
+    if (road) input.value = road[key];
+  });
+  editor.querySelectorAll("[data-road-output]").forEach((output) => {
+    const key = output.dataset.roadOutput;
+    if (!road) {
+      output.textContent = key === "rotation" ? "0°" : "0";
+    } else {
+      output.textContent = key === "rotation" ? `${road[key]}°` : road[key].toFixed(2);
+    }
+  });
+}
+
+function updateZoneBasePanel(id) {
+  const values = zoneBaseValues.get(id) || ZONE_BASE_DEFAULTS[id];
+  if (!values) return;
+  document.querySelectorAll("[data-zone-base-edit]").forEach((input) => {
+    const key = input.dataset.zoneBaseEdit;
+    input.value = values[key];
+  });
+  document.querySelectorAll("[data-zone-base-output]").forEach((output) => {
+    const key = output.dataset.zoneBaseOutput;
+    output.textContent = values[key].toFixed(2);
+  });
 }
 
 function addSwoosh(x, y, z, s = 1, rot = 0) {
@@ -245,7 +1621,7 @@ function addSwoosh(x, y, z, s = 1, rot = 0) {
   group.add(mesh);
   group.position.set(x, y, z);
   group.rotation.y = rot;
-  scene.add(group);
+  addSceneObject(group);
   return group;
 }
 
@@ -253,7 +1629,7 @@ function nikeStore(x, z, w, d, h, rot = 0, roof = "flat") {
   const group = new THREE.Group();
   group.position.set(x, 0.25, z);
   group.rotation.y = rot;
-  scene.add(group);
+  addSceneObject(group);
 
   const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mats.white);
   body.position.y = h / 2;
@@ -287,7 +1663,7 @@ function court(x, z, w, d, type = "soccer", rot = 0) {
   const group = new THREE.Group();
   group.position.set(x, 0.27, z);
   group.rotation.y = rot;
-  scene.add(group);
+  addSceneObject(group);
   const base = new THREE.Mesh(new THREE.BoxGeometry(w, 0.04, d), mats.black);
   base.position.y = 0.03;
   base.receiveShadow = true;
@@ -330,7 +1706,7 @@ function tree(x, z, yellow = true) {
   const cone = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.55, 16), yellow ? mats.yellow : mats.white);
   cone.position.set(x, 0.82, z);
   cone.castShadow = true;
-  scene.add(cone);
+  addSceneObject(cone);
 }
 
 function lamp(x, z) {
@@ -348,7 +1724,7 @@ function car(x, z, rot = 0) {
   const group = new THREE.Group();
   group.position.set(x, 0.34, z);
   group.rotation.y = rot;
-  scene.add(group);
+  addSceneObject(group);
   const body = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.16, 0.22), mats.yellow);
   body.castShadow = true;
   group.add(body);
@@ -374,7 +1750,7 @@ function addRing(radius, tube, mat, x, y, z, rot = 0) {
   ring.rotation.set(Math.PI / 2, 0, rot);
   ring.castShadow = true;
   ring.receiveShadow = true;
-  scene.add(ring);
+  addSceneObject(ring);
   return ring;
 }
 
@@ -390,7 +1766,7 @@ function addTrafficCone(x, z, rot = 0) {
   cone.position.set(x, 0.52, z);
   cone.rotation.y = rot;
   cone.castShadow = true;
-  scene.add(cone);
+  addSceneObject(cone);
   box(0.18, 0.045, 0.18, mats.yellow, x, 0.27, z, rot);
 }
 
@@ -403,7 +1779,7 @@ function signPost(x, z, rot = 0, kind = "arrow") {
     tip.position.set(x + Math.cos(rot) * 0.28, 1.0, z - Math.sin(rot) * 0.28);
     tip.rotation.set(0, rot - Math.PI / 2, Math.PI / 2);
     tip.castShadow = true;
-    scene.add(tip);
+    addSceneObject(tip);
   }
 }
 
@@ -417,7 +1793,7 @@ function fountain(x, z) {
 function centralPlaza(x, z) {
   const group = new THREE.Group();
   group.position.set(x, 0.25, z);
-  scene.add(group);
+  addSceneObject(group);
 
   const base = new THREE.Mesh(new THREE.CylinderGeometry(1.18, 1.18, 0.62, 96), mats.white);
   base.position.y = 0.31;
@@ -475,13 +1851,127 @@ function loadBlenderCentralPlaza(x, z) {
         child.castShadow = true;
         child.receiveShadow = true;
       });
+      registerZoneRoot("central", plaza);
       scene.add(plaza);
     },
     undefined,
     () => {
-      buildProceduralCentralPlaza(x, z);
+      buildRotatableZone("central", x, z, () => buildProceduralCentralPlaza(x, z));
     }
   );
+}
+
+function loadZoneModel({ url, id, name, x, z, y = 0.25, scale = 1, rotationY = 0, fallback }) {
+  const loader = new GLTFLoader();
+  loader.load(
+    url,
+    (gltf) => {
+      const zoneModel = gltf.scene;
+      zoneModel.name = name;
+      zoneModel.position.set(x, y, z);
+      zoneModel.rotation.y = rotationY;
+      zoneModel.scale.setScalar(scale);
+      zoneModel.traverse((child) => {
+        if (!child.isMesh) return;
+        child.castShadow = true;
+        child.receiveShadow = true;
+      });
+      registerZoneRoot(id, zoneModel);
+      scene.add(zoneModel);
+    },
+    undefined,
+    () => {
+      fallback?.();
+    }
+  );
+}
+
+function loadBlenderEstacionamiento(x, z) {
+  loadZoneModel({
+    url: ESTACIONAMIENTO_GLB,
+    id: "parking",
+    name: "zona_estacionamiento",
+    x,
+    z,
+    fallback: () => buildRotatableZone("parking", x, z, () => buildProceduralEstacionamiento(x, z))
+  });
+}
+
+function loadBlenderMetro(x, z) {
+  loadZoneModel({
+    url: METRO_GLB,
+    id: "metro",
+    name: "zona_metro",
+    x,
+    z,
+    fallback: () => buildRotatableZone("metro", x, z, () => buildProceduralMetro(x, z))
+  });
+}
+
+function loadBlenderRunning(x, z) {
+  loadZoneModel({
+    url: RUNNING_GLB,
+    id: "running",
+    name: "zona_running",
+    x,
+    z,
+    fallback: () => buildRotatableZone("running", x, z, () => buildProceduralRunning(x, z))
+  });
+}
+
+function loadBlenderSoccer(x, z) {
+  loadZoneModel({
+    url: SOCCER_GLB,
+    id: "soccer",
+    name: "zona_soccer",
+    x,
+    z,
+    fallback: () => buildRotatableZone("soccer", x, z, () => buildProceduralSoccer(x, z))
+  });
+}
+
+function loadBlenderBasketball(x, z) {
+  loadZoneModel({
+    url: BASKETBALL_GLB,
+    id: "basketball",
+    name: "zona_basketball",
+    x,
+    z,
+    fallback: () => buildRotatableZone("basketball", x, z, () => buildProceduralBasketball(x, z))
+  });
+}
+
+function loadBlenderCasual(x, z) {
+  loadZoneModel({
+    url: CASUAL_GLB,
+    id: "casual",
+    name: "zona_casual",
+    x,
+    z,
+    fallback: () => buildRotatableZone("casual", x, z, () => buildProceduralCasual(x, z))
+  });
+}
+
+function loadBlenderJuvenil(x, z) {
+  loadZoneModel({
+    url: JUVENIL_GLB,
+    id: "juvenil",
+    name: "zona_juvenil",
+    x,
+    z,
+    fallback: () => buildRotatableZone("juvenil", x, z, () => buildProceduralJuvenil(x, z))
+  });
+}
+
+function loadBlenderSkate(x, z) {
+  loadZoneModel({
+    url: SKATE_GLB,
+    id: "skate",
+    name: "zona_skate",
+    x,
+    z,
+    fallback: () => buildRotatableZone("skate", x, z, () => buildProceduralSkate(x, z))
+  });
 }
 
 function buildProceduralCentralPlaza(x, z) {
@@ -500,11 +1990,74 @@ function buildProceduralCentralPlaza(x, z) {
   decoratePlatform(x, z, 3.65, 2.8);
 }
 
+function buildProceduralEstacionamiento(x, z) {
+  platform(x, z, 3.55, 2.45);
+  nikeStore(x, z, 2.35, 1.25, 0.74, 0, "black");
+  box(1.4, 0.08, 0.58, mats.yellow, x, 1.02, z);
+  decoratePlatform(x, z, 3.55, 2.45);
+}
+
+function buildProceduralRunning(x, z) {
+  platform(x, z, 4.3, 3.05);
+  runningTrack(x, z);
+  nikeStore(x, z + 0.08, 1.45, 0.95, 0.75, 0.05, "black");
+  decoratePlatform(x, z, 4.3, 3.05);
+}
+
+function buildProceduralSoccer(x, z) {
+  platform(x, z, 4.9, 3.25);
+  nikeStore(x, z, 3.15, 2.02, 0.92, 0, "flat");
+  court(x, z + 0.03, 2.42, 1.44, "soccer");
+  decoratePlatform(x, z, 4.9, 3.25);
+}
+
+function buildProceduralBasketball(x, z) {
+  platform(x, z, 3.75, 2.55);
+  nikeStore(x, z, 2.35, 1.45, 0.72);
+  court(x, z, 2.0, 1.16, "basketball");
+  decoratePlatform(x, z, 3.75, 2.55);
+}
+
+function buildProceduralCasual(x, z) {
+  platform(x, z, 3.55, 2.38);
+  nikeStore(x, z, 2.35, 1.3, 0.72, 0.03, "black");
+  box(0.78, 0.12, 0.35, mats.black, x, 1.02, z);
+  decoratePlatform(x, z, 3.55, 2.38);
+}
+
+function buildProceduralJuvenil(x, z) {
+  platform(x, z, 4.25, 3.08);
+  nikeStore(x - 1.15, z - 0.3, 1.15, 0.9, 0.72, 0.05, "black");
+  nikeStore(x + 0.2, z + 0.25, 1.0, 0.85, 0.72, 0.05, "black");
+  nikeStore(x + 1.25, z - 0.22, 0.9, 0.8, 0.58, 0.05, "black");
+  cyl(0.62, 0.64, mats.white, x + 0.25, 0.25, z - 1.05);
+  cyl(0.46, 0.08, mats.yellow, x + 0.25, 0.94, z - 1.05);
+  decoratePlatform(x, z, 4.25, 3.08);
+}
+
+function buildProceduralSkate(x, z) {
+  platform(x, z, 4.15, 2.25);
+  box(1.8, 0.2, 1.15, mats.white, x, 0.27, z);
+  box(1.35, 0.08, 0.72, mats.yellow, x, 0.5, z);
+  box(1.0, 0.06, 0.48, mats.road, x, 0.61, z);
+  decoratePlatform(x, z, 4.15, 2.25);
+}
+
+function buildProceduralMetro(x, z) {
+  platform(x, z, 2.95, 2.12);
+  metroStation(x, z - 0.12);
+  tree(x - 0.9, z + 0.54, true);
+  tree(x + 0.82, z + 0.48, true);
+  lamp(x - 0.72, z - 0.68);
+  lamp(x + 0.7, z - 0.66);
+  bench(x + 0.56, z + 0.68, -0.25);
+}
+
 function metroStation(x, z) {
   const group = new THREE.Group();
   group.position.set(x, 0.25, z);
   group.scale.setScalar(1.18);
-  scene.add(group);
+  addSceneObject(group);
 
   addLocalBox(group, 1.08, 0.18, 0.95, mats.white, 0, 0, 0.08);
   addLocalBox(group, 0.92, 0.08, 0.8, mats.yellow, 0, 0.18, 0.08);
@@ -562,12 +2115,21 @@ function metroStation(x, z) {
 
 function pinLabel(zone) {
   const el = document.createElement("button");
-  el.className = "zone-label";
+  el.className = `zone-label zone-${zone.id}`;
+  el.dataset.zone = zone.id;
   el.style.setProperty("--stem", `${zone.stem || 82}px`);
   el.innerHTML = `<span class="icon">${zone.icon}</span><span class="copy"><strong>${zone.name}</strong><span>${zone.coords}</span></span>`;
   labelLayer.appendChild(el);
   el.addEventListener("click", () => setActive(zone.id));
   labels.push({ ...zone, element: el, world: new THREE.Vector3(zone.x, zone.y || 1.5, zone.z) });
+  const position = zonePositionValues.get(zone.id);
+  if (position) {
+    zoneLabelOffsets.set(zone.id, {
+      x: zone.x - position.x,
+      y: zone.y || 1.5,
+      z: zone.z - position.z
+    });
+  }
 }
 
 function projectLabels() {
@@ -616,6 +2178,16 @@ function buildCity() {
   grid.position.y = 0.01;
   scene.add(grid);
 
+  layoutIslandGroup = new THREE.Group();
+  layoutIslandGroup.name = "layout_islands";
+  scene.add(layoutIslandGroup);
+  layoutAssetGroup = new THREE.Group();
+  layoutAssetGroup.name = "layout_assets";
+  scene.add(layoutAssetGroup);
+  layoutRoadGroup = new THREE.Group();
+  layoutRoadGroup.name = "layout_roads";
+  scene.add(layoutRoadGroup);
+
   const zone = {
     soccer: { x: -2.8, z: -5.1 },
     basketball: { x: 5.8, z: -3.0 },
@@ -628,74 +2200,123 @@ function buildCity() {
     parking: { x: 5.65, z: 7.65 }
   };
 
-  addRoad(0.6, -2.4, 12.4, 1.62, -0.32);
-  addRoad(0.25, 1.25, 13.2, 1.9, 0);
-  addRoad(0.05, 5.4, 14.1, 1.72, 0);
-  addRoad(-2.15, 2.8, 11.6, 1.68, 0.78);
-  addRoad(2.35, 2.75, 11.3, 1.68, -0.78);
-  addRoad(-0.5, 1.1, 1.78, 13.2, 0);
-  addRoad(5.05, 2.55, 1.55, 8.6, 0);
-  addRoad(-4.05, 2.15, 1.55, 8.0, 0);
+  Object.entries(zone).forEach(([id, position]) => {
+    const savedZone = savedLayoutState?.zones?.[id];
+    const savedBase = savedLayoutState?.bases?.[id];
+    const nextPosition = {
+      x: isFiniteNumber(savedZone?.x) ? savedZone.x : position.x,
+      z: isFiniteNumber(savedZone?.z) ? savedZone.z : position.z
+    };
+    zone[id] = nextPosition;
+    zonePositionValues.set(id, nextPosition);
+    if (isFiniteNumber(savedZone?.rotation)) {
+      zoneRotationValues.set(id, savedZone.rotation);
+    }
+    createZoneBaseHelper(id, nextPosition.x, nextPosition.z);
+    if (isFiniteNumber(savedBase?.w) && isFiniteNumber(savedBase?.d)) {
+      setZoneBaseSize(id, savedBase.w, savedBase.d, false);
+    }
+  });
 
-  [[-0.5, -0.65, 0], [-0.5, 2.95, 0], [-0.5, 6.25, 0],
-    [-2.05, 1.25, Math.PI / 2], [2.0, 1.25, Math.PI / 2],
-    [5.05, 4.0, 0], [-4.05, 4.0, 0], [3.35, -2.95, Math.PI / 2]]
-    .forEach(([x, z, r]) => addCrosswalk(x, z, r));
+  if (SHOW_LAYOUT_ISLANDS) {
+    savedLayoutState?.islands?.forEach((island) => {
+      if (!ISLAND_TYPES[island.type] || !isFiniteNumber(island.x) || !isFiniteNumber(island.z)) return;
+      createLayoutIsland(island.type, island.x, island.z, {
+        id: island.id,
+        w: isFiniteNumber(island.w) ? island.w : undefined,
+        d: isFiniteNumber(island.d) ? island.d : undefined,
+        rotation: isFiniteNumber(island.rotation) ? island.rotation : undefined,
+        select: false,
+        persist: false
+      });
+    });
+  }
+  selectedIslandId = null;
 
-  platform(zone.running.x, zone.running.z, 4.3, 3.05);
-  runningTrack(zone.running.x, zone.running.z);
-  nikeStore(zone.running.x, zone.running.z + 0.08, 1.45, 0.95, 0.75, 0.05, "black");
-  decoratePlatform(zone.running.x, zone.running.z, 4.3, 3.05);
+  savedLayoutState?.assets?.forEach((asset) => {
+    if (!ASSET_TYPES[asset.type] || !isFiniteNumber(asset.x) || !isFiniteNumber(asset.z)) return;
+    createLayoutAsset(asset.type, asset.x, asset.z, {
+      id: asset.id,
+      scale: isFiniteNumber(asset.scale) ? asset.scale : undefined,
+      rotation: isFiniteNumber(asset.rotation) ? asset.rotation : undefined,
+      select: false,
+      persist: false
+    });
+  });
+  selectedAssetId = null;
 
-  platform(zone.soccer.x, zone.soccer.z, 4.9, 3.25);
-  nikeStore(zone.soccer.x, zone.soccer.z, 3.15, 2.02, 0.92, 0, "flat");
-  court(zone.soccer.x, zone.soccer.z + 0.03, 2.42, 1.44, "soccer");
-  decoratePlatform(zone.soccer.x, zone.soccer.z, 4.9, 3.25);
+  savedRoadState?.roads?.forEach((road) => {
+    if (!ROAD_TYPES[road.type] || !isFiniteNumber(road.x) || !isFiniteNumber(road.z)) return;
+    createLayoutRoad(road.type, road.x, road.z, {
+      id: road.id,
+      scaleX: isFiniteNumber(road.scaleX) ? road.scaleX : undefined,
+      scaleZ: isFiniteNumber(road.scaleZ) ? road.scaleZ : undefined,
+      rotation: isFiniteNumber(road.rotation) ? road.rotation : undefined,
+      select: false,
+      persist: false
+    });
+  });
+  selectedRoadId = null;
 
-  platform(zone.basketball.x, zone.basketball.z, 3.75, 2.55);
-  nikeStore(zone.basketball.x, zone.basketball.z, 2.35, 1.45, 0.72);
-  court(zone.basketball.x, zone.basketball.z, 2.0, 1.16, "basketball");
-  decoratePlatform(zone.basketball.x, zone.basketball.z, 3.75, 2.55);
+  buildCityAtmosphere();
 
-  platform(zone.juvenil.x, zone.juvenil.z, 4.25, 3.08);
-  nikeStore(zone.juvenil.x - 1.15, zone.juvenil.z - 0.3, 1.15, 0.9, 0.72, 0.05, "black");
-  nikeStore(zone.juvenil.x + 0.2, zone.juvenil.z + 0.25, 1.0, 0.85, 0.72, 0.05, "black");
-  nikeStore(zone.juvenil.x + 1.25, zone.juvenil.z - 0.22, 0.9, 0.8, 0.58, 0.05, "black");
-  cyl(0.62, 0.64, mats.white, zone.juvenil.x + 0.25, 0.25, zone.juvenil.z - 1.05);
-  cyl(0.46, 0.08, mats.yellow, zone.juvenil.x + 0.25, 0.94, zone.juvenil.z - 1.05);
-  decoratePlatform(zone.juvenil.x, zone.juvenil.z, 4.25, 3.08);
+  if (SHOW_CITY_ROADS) {
+    buildNikeCityRoads(zone);
+  }
+
+  if (USE_BLENDER_RUNNING) {
+    loadBlenderRunning(zone.running.x, zone.running.z);
+  } else {
+    buildRotatableZone("running", zone.running.x, zone.running.z, () => buildProceduralRunning(zone.running.x, zone.running.z));
+  }
+
+  if (USE_BLENDER_SOCCER) {
+    loadBlenderSoccer(zone.soccer.x, zone.soccer.z);
+  } else {
+    buildRotatableZone("soccer", zone.soccer.x, zone.soccer.z, () => buildProceduralSoccer(zone.soccer.x, zone.soccer.z));
+  }
+
+  if (USE_BLENDER_BASKETBALL) {
+    loadBlenderBasketball(zone.basketball.x, zone.basketball.z);
+  } else {
+    buildRotatableZone("basketball", zone.basketball.x, zone.basketball.z, () => buildProceduralBasketball(zone.basketball.x, zone.basketball.z));
+  }
+
+  if (USE_BLENDER_JUVENIL) {
+    loadBlenderJuvenil(zone.juvenil.x, zone.juvenil.z);
+  } else {
+    buildRotatableZone("juvenil", zone.juvenil.x, zone.juvenil.z, () => buildProceduralJuvenil(zone.juvenil.x, zone.juvenil.z));
+  }
 
   if (USE_BLENDER_PLAZA_CENTRAL) {
     loadBlenderCentralPlaza(zone.central.x, zone.central.z);
   } else {
-    buildProceduralCentralPlaza(zone.central.x, zone.central.z);
+    buildRotatableZone("central", zone.central.x, zone.central.z, () => buildProceduralCentralPlaza(zone.central.x, zone.central.z));
   }
 
-  platform(zone.casual.x, zone.casual.z, 3.55, 2.38);
-  nikeStore(zone.casual.x, zone.casual.z, 2.35, 1.3, 0.72, 0.03, "black");
-  box(0.78, 0.12, 0.35, mats.black, zone.casual.x, 1.02, zone.casual.z);
-  decoratePlatform(zone.casual.x, zone.casual.z, 3.55, 2.38);
+  if (USE_BLENDER_CASUAL) {
+    loadBlenderCasual(zone.casual.x, zone.casual.z);
+  } else {
+    buildRotatableZone("casual", zone.casual.x, zone.casual.z, () => buildProceduralCasual(zone.casual.x, zone.casual.z));
+  }
 
-  platform(zone.skate.x, zone.skate.z, 4.15, 2.25);
-  box(1.8, 0.2, 1.15, mats.white, zone.skate.x, 0.27, zone.skate.z);
-  box(1.35, 0.08, 0.72, mats.yellow, zone.skate.x, 0.5, zone.skate.z);
-  box(1.0, 0.06, 0.48, mats.road, zone.skate.x, 0.61, zone.skate.z);
-  decoratePlatform(zone.skate.x, zone.skate.z, 4.15, 2.25);
+  if (USE_BLENDER_SKATE) {
+    loadBlenderSkate(zone.skate.x, zone.skate.z);
+  } else {
+    buildRotatableZone("skate", zone.skate.x, zone.skate.z, () => buildProceduralSkate(zone.skate.x, zone.skate.z));
+  }
 
-  platform(zone.metro.x, zone.metro.z, 2.95, 2.12);
-  metroStation(zone.metro.x, zone.metro.z - 0.12);
-  tree(zone.metro.x - 0.9, zone.metro.z + 0.54, true);
-  tree(zone.metro.x + 0.82, zone.metro.z + 0.48, true);
-  lamp(zone.metro.x - 0.72, zone.metro.z - 0.68);
-  lamp(zone.metro.x + 0.7, zone.metro.z - 0.66);
-  bench(zone.metro.x + 0.56, zone.metro.z + 0.68, -0.25);
+  if (USE_BLENDER_METRO) {
+    loadBlenderMetro(zone.metro.x, zone.metro.z);
+  } else {
+    buildRotatableZone("metro", zone.metro.x, zone.metro.z, () => buildProceduralMetro(zone.metro.x, zone.metro.z));
+  }
 
-  platform(zone.parking.x, zone.parking.z, 3.55, 2.45);
-  nikeStore(zone.parking.x, zone.parking.z, 2.35, 1.25, 0.74, 0, "black");
-  box(1.4, 0.08, 0.58, mats.yellow, zone.parking.x, 1.02, zone.parking.z);
-  decoratePlatform(zone.parking.x, zone.parking.z, 3.55, 2.45);
-
-  [[-1.8, 3.8, -0.3], [2.8, -1.2, 0.15], [5.1, 4.4, -0.2], [-3.2, -1.0, -0.4]].forEach(([x, z, r]) => car(x, z, r));
+  if (USE_BLENDER_ESTACIONAMIENTO) {
+    loadBlenderEstacionamiento(zone.parking.x, zone.parking.z);
+  } else {
+    buildRotatableZone("parking", zone.parking.x, zone.parking.z, () => buildProceduralEstacionamiento(zone.parking.x, zone.parking.z));
+  }
 
   const zones = [
     { id: "soccer", name: "Zona Soccer", coords: "[I2 - L4]", icon: "●", x: zone.soccer.x - 0.35, y: 2.08, z: zone.soccer.z + 1.52, stem: 96 },
@@ -709,6 +2330,7 @@ function buildCity() {
     { id: "parking", name: "Estacionamiento", coords: "[L12 - O14]", icon: "P", x: zone.parking.x + 1.2, y: 1.5, z: zone.parking.z + 0.82, stem: 62 }
   ];
   zones.forEach(pinLabel);
+  setupZoneRotationPanel();
 }
 
 function resize() {
@@ -729,13 +2351,337 @@ function resize() {
 
 const pointer = new THREE.Vector2();
 const raycaster = new THREE.Raycaster();
+const layoutPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+const dragPoint = new THREE.Vector3();
+const dragOffset = new THREE.Vector3();
+const panStartPointer = new THREE.Vector2();
+const panStartCamera = new THREE.Vector3();
+const panStartTarget = new THREE.Vector3();
+let draggedZoneId = null;
+let didDragZone = false;
+let isSpaceDown = false;
+let isScenePanning = false;
 
-function pick(event) {
-  if (!canvas) return;
+function updatePointerFromEvent(event) {
+  if (!canvas) return null;
   const rect = canvas.getBoundingClientRect();
   pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
   pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
   raycaster.setFromCamera(pointer, camera);
+  return rect;
+}
+
+function findZoneIdFromObject(object) {
+  let current = object;
+  while (current) {
+    if (current.userData?.zoneRootId) return current.userData.zoneRootId;
+    current = current.parent;
+  }
+  return null;
+}
+
+function getZoneHit(event) {
+  updatePointerFromEvent(event);
+  const roots = Array.from(zoneRotatables.values());
+  if (!roots.length) return null;
+  const hits = raycaster.intersectObjects(roots, true);
+  const hit = hits.find((item) => findZoneIdFromObject(item.object));
+  if (!hit) return null;
+  const id = findZoneIdFromObject(hit.object);
+  return { id, root: zoneRotatables.get(id), point: hit.point };
+}
+
+function findIslandIdFromObject(object) {
+  let current = object;
+  while (current) {
+    if (current.userData?.layoutIslandId) return current.userData.layoutIslandId;
+    current = current.parent;
+  }
+  return null;
+}
+
+function getIslandHit(event) {
+  updatePointerFromEvent(event);
+  if (!layoutIslandGroup?.children.length) return null;
+  const hits = raycaster.intersectObjects(layoutIslandGroup.children, true);
+  const hit = hits.find((item) => findIslandIdFromObject(item.object));
+  if (!hit) return null;
+  const id = findIslandIdFromObject(hit.object);
+  return { id, mesh: getIslandMesh(id), point: hit.point };
+}
+
+function findAssetIdFromObject(object) {
+  let current = object;
+  while (current) {
+    if (current.userData?.layoutAssetId) return current.userData.layoutAssetId;
+    current = current.parent;
+  }
+  return null;
+}
+
+function getAssetHit(event) {
+  updatePointerFromEvent(event);
+  if (!layoutAssetGroup?.children.length) return null;
+  const hits = raycaster.intersectObjects(layoutAssetGroup.children, true);
+  const hit = hits.find((item) => findAssetIdFromObject(item.object));
+  if (!hit) return null;
+  const id = findAssetIdFromObject(hit.object);
+  return { id, object: getAssetObject(id), point: hit.point };
+}
+
+function findRoadIdFromObject(object) {
+  let current = object;
+  while (current) {
+    if (current.userData?.layoutRoadId) return current.userData.layoutRoadId;
+    current = current.parent;
+  }
+  return null;
+}
+
+function getRoadHit(event) {
+  updatePointerFromEvent(event);
+  if (!layoutRoadGroup?.children.length) return null;
+  const hits = raycaster.intersectObjects(layoutRoadGroup.children, true);
+  const markingHit = hits.find((item) => {
+    const id = findRoadIdFromObject(item.object);
+    return id && isRoadMarkingType(getRoadData(id)?.type);
+  });
+  const hit = markingHit || hits.find((item) => findRoadIdFromObject(item.object));
+  if (!hit) return null;
+  const id = findRoadIdFromObject(hit.object);
+  return { id, object: getRoadObject(id), point: hit.point };
+}
+
+function getLayoutPlanePoint(event) {
+  updatePointerFromEvent(event);
+  return raycaster.ray.intersectPlane(layoutPlane, dragPoint);
+}
+
+function startScenePan(event) {
+  isScenePanning = true;
+  didDragZone = true;
+  panStartPointer.set(event.clientX, event.clientY);
+  panStartCamera.copy(camera.position);
+  panStartTarget.copy(controls.target);
+  if (controls) controls.enabled = false;
+  document.body.classList.add("is-layout-panning");
+  canvas.setPointerCapture?.(event.pointerId);
+  event.preventDefault();
+  event.stopPropagation();
+}
+
+function moveScenePan(event) {
+  if (!isScenePanning || !controls) return;
+  const rect = canvas.getBoundingClientRect();
+  const worldPerPixel = (camera.top - camera.bottom) / (rect.height * camera.zoom);
+  const dx = event.clientX - panStartPointer.x;
+  const dy = event.clientY - panStartPointer.y;
+  const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+  const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
+  const movement = right.multiplyScalar(-dx * worldPerPixel).add(up.multiplyScalar(dy * worldPerPixel));
+  camera.position.copy(panStartCamera).add(movement);
+  controls.target.copy(panStartTarget).add(movement);
+  controls.update();
+  projectLabels();
+  event.preventDefault();
+  event.stopPropagation();
+}
+
+function endScenePan(event) {
+  if (!isScenePanning) return;
+  isScenePanning = false;
+  if (controls) controls.enabled = true;
+  document.body.classList.remove("is-layout-panning");
+  canvas.releasePointerCapture?.(event.pointerId);
+  event.preventDefault();
+  event.stopPropagation();
+}
+
+function startZoneDrag(event) {
+  if (!canvas || event.button !== 0) return;
+  if (isSpaceDown) {
+    startScenePan(event);
+    return;
+  }
+  const roadHit = getRoadHit(event);
+  if (roadHit?.object) {
+    draggedRoadId = roadHit.id;
+    didDragZone = false;
+    selectLayoutRoad(roadHit.id);
+    event.preventDefault();
+    event.stopPropagation();
+    const point = getLayoutPlanePoint(event) || roadHit.point;
+    dragOffset.set(roadHit.object.position.x - point.x, 0, roadHit.object.position.z - point.z);
+    if (controls) controls.enabled = false;
+    canvas.setPointerCapture?.(event.pointerId);
+    return;
+  }
+  const assetHit = getAssetHit(event);
+  if (assetHit?.object) {
+    draggedAssetId = assetHit.id;
+    didDragZone = false;
+    selectLayoutAsset(assetHit.id);
+    event.preventDefault();
+    event.stopPropagation();
+    const point = getLayoutPlanePoint(event) || assetHit.point;
+    dragOffset.set(assetHit.object.position.x - point.x, 0, assetHit.object.position.z - point.z);
+    if (controls) controls.enabled = false;
+    canvas.setPointerCapture?.(event.pointerId);
+    return;
+  }
+  const islandHit = getIslandHit(event);
+  if (islandHit?.mesh) {
+    draggedIslandId = islandHit.id;
+    didDragZone = false;
+    selectLayoutIsland(islandHit.id);
+    event.preventDefault();
+    event.stopPropagation();
+    const point = getLayoutPlanePoint(event) || islandHit.point;
+    dragOffset.set(islandHit.mesh.position.x - point.x, 0, islandHit.mesh.position.z - point.z);
+    if (controls) controls.enabled = false;
+    canvas.setPointerCapture?.(event.pointerId);
+    return;
+  }
+  const hit = getZoneHit(event);
+  if (hit?.root) {
+    draggedZoneId = hit.id;
+    didDragZone = false;
+    setActive(hit.id);
+    event.preventDefault();
+    event.stopPropagation();
+    const point = getLayoutPlanePoint(event) || hit.point;
+    dragOffset.set(hit.root.position.x - point.x, 0, hit.root.position.z - point.z);
+    if (controls) controls.enabled = false;
+    canvas.setPointerCapture?.(event.pointerId);
+    return;
+  }
+  if (selectedRoadType) {
+    const point = getLayoutPlanePoint(event);
+    if (point) {
+      const snapped = snapRoadPosition(point.x, point.z, null, selectedRoadType);
+      createLayoutRoad(
+        selectedRoadType,
+        snapped.x,
+        snapped.z
+      );
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    return;
+  }
+  if (selectedAssetType) {
+    const point = getLayoutPlanePoint(event);
+    if (point) {
+      createLayoutAsset(
+        selectedAssetType,
+        snapToLayoutGrid(point.x),
+        snapToLayoutGrid(point.z)
+      );
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    return;
+  }
+  if (selectedIslandType) {
+    const point = getLayoutPlanePoint(event);
+    if (point) {
+      createLayoutIsland(
+        selectedIslandType,
+        snapToLayoutGrid(point.x),
+        snapToLayoutGrid(point.z)
+      );
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    return;
+  }
+}
+
+function moveZoneDrag(event) {
+  if (isScenePanning) {
+    moveScenePan(event);
+    return;
+  }
+  if (draggedIslandId) {
+    const point = getLayoutPlanePoint(event);
+    if (!point) return;
+    const island = getIslandData(draggedIslandId);
+    if (island) {
+      updateLayoutIsland(draggedIslandId, {
+        x: snapToLayoutGrid(point.x + dragOffset.x),
+        z: snapToLayoutGrid(point.z + dragOffset.z)
+      });
+    }
+    didDragZone = true;
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
+  if (draggedAssetId) {
+    const point = getLayoutPlanePoint(event);
+    if (!point) return;
+    const asset = getAssetData(draggedAssetId);
+    if (asset) {
+      updateLayoutAsset(draggedAssetId, {
+        x: snapToLayoutGrid(point.x + dragOffset.x),
+        z: snapToLayoutGrid(point.z + dragOffset.z)
+      });
+    }
+    didDragZone = true;
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
+  if (draggedRoadId) {
+    const point = getLayoutPlanePoint(event);
+    if (!point) return;
+    const road = getRoadData(draggedRoadId);
+    if (road) {
+      const snapped = snapRoadPosition(point.x + dragOffset.x, point.z + dragOffset.z, draggedRoadId);
+      updateLayoutRoad(draggedRoadId, {
+        x: snapped.x,
+        z: snapped.z
+      });
+    }
+    didDragZone = true;
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
+  if (!draggedZoneId) return;
+  const point = getLayoutPlanePoint(event);
+  if (!point) return;
+  const x = snapToLayoutGrid(point.x + dragOffset.x);
+  const z = snapToLayoutGrid(point.z + dragOffset.z);
+  setZonePosition(draggedZoneId, x, z);
+  didDragZone = true;
+  event.preventDefault();
+  event.stopPropagation();
+}
+
+function endZoneDrag(event) {
+  if (isScenePanning) {
+    endScenePan(event);
+    return;
+  }
+  if (!draggedZoneId && !draggedIslandId && !draggedAssetId && !draggedRoadId) return;
+  canvas.releasePointerCapture?.(event.pointerId);
+  draggedZoneId = null;
+  draggedIslandId = null;
+  draggedAssetId = null;
+  draggedRoadId = null;
+  if (controls) controls.enabled = true;
+  event.preventDefault();
+  event.stopPropagation();
+}
+
+function pick(event) {
+  if (didDragZone) {
+    didDragZone = false;
+    return;
+  }
+  if (!canvas) return;
+  updatePointerFromEvent(event);
   const hits = raycaster.intersectObjects(clickables, true);
   if (hits[0]?.object?.userData?.zone) setActive(hits[0].object.userData.zone);
 }
@@ -744,6 +2690,26 @@ if (canvas) {
   buildCity();
   resize();
   window.addEventListener("resize", resize);
+  window.addEventListener("keydown", (event) => {
+    if (event.code !== "Space") return;
+    isSpaceDown = true;
+    document.body.classList.add("is-layout-pan-ready");
+    event.preventDefault();
+  });
+  window.addEventListener("keyup", (event) => {
+    if (event.code !== "Space") return;
+    isSpaceDown = false;
+    document.body.classList.remove("is-layout-pan-ready");
+    if (isScenePanning) {
+      isScenePanning = false;
+      if (controls) controls.enabled = true;
+      document.body.classList.remove("is-layout-panning");
+    }
+  });
+  canvas.addEventListener("pointerdown", startZoneDrag, { capture: true });
+  canvas.addEventListener("pointermove", moveZoneDrag, { capture: true });
+  canvas.addEventListener("pointerup", endZoneDrag, { capture: true });
+  canvas.addEventListener("pointercancel", endZoneDrag, { capture: true });
   canvas.addEventListener("click", pick);
 }
 
@@ -1309,6 +3275,87 @@ function pageTransition(url) {
     .to(morphLayers, { duration: 0.82 }, ">-0.02");
 }
 
+function playTone(frequency, start, duration, type = "triangle", gain = 0.045) {
+  if (!audioContext || !masterGain) return;
+  const oscillator = audioContext.createOscillator();
+  const toneGain = audioContext.createGain();
+  oscillator.type = type;
+  oscillator.frequency.setValueAtTime(frequency, start);
+  toneGain.gain.setValueAtTime(0.0001, start);
+  toneGain.gain.exponentialRampToValueAtTime(gain, start + 0.025);
+  toneGain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+  oscillator.connect(toneGain);
+  toneGain.connect(masterGain);
+  oscillator.start(start);
+  oscillator.stop(start + duration + 0.04);
+}
+
+function startNikeCityMusic() {
+  if (!musicEnabled || musicTimer || !window.AudioContext && !window.webkitAudioContext) return;
+  audioContext ||= new (window.AudioContext || window.webkitAudioContext)();
+  if (audioContext.state === "suspended") audioContext.resume();
+  if (!masterGain) {
+    masterGain = audioContext.createGain();
+    masterGain.gain.value = 0.18;
+    masterGain.connect(audioContext.destination);
+  }
+
+  const melody = [392, 494, 587, 659, 587, 494, 440, 523];
+  const bass = [98, 123.47, 146.83, 123.47];
+  const schedule = () => {
+    if (!musicEnabled || !audioContext) return;
+    const now = audioContext.currentTime + 0.04;
+    const note = melody[musicStep % melody.length];
+    playTone(note, now, 0.16, "triangle", 0.04);
+    if (musicStep % 2 === 0) playTone(note * 2, now + 0.08, 0.12, "sine", 0.018);
+    if (musicStep % 4 === 0) playTone(bass[(musicStep / 4) % bass.length], now, 0.28, "square", 0.018);
+    musicStep += 1;
+  };
+  schedule();
+  musicTimer = window.setInterval(schedule, 230);
+}
+
+function stopNikeCityMusic() {
+  if (musicTimer) {
+    window.clearInterval(musicTimer);
+    musicTimer = null;
+  }
+  if (masterGain && audioContext) {
+    masterGain.gain.setTargetAtTime(0.0001, audioContext.currentTime, 0.03);
+    window.setTimeout(() => {
+      if (masterGain && audioContext) masterGain.gain.value = 0.18;
+    }, 220);
+  }
+}
+
+function updateSoundButtons() {
+  document.querySelectorAll(".sound-toggle").forEach((button) => {
+    button.classList.toggle("is-muted", !musicEnabled);
+    button.innerHTML = `${musicEnabled ? "Sound on" : "Muted"} <span>${musicEnabled ? "◕" : "○"}</span>`;
+  });
+}
+
+function initSoundControls() {
+  updateSoundButtons();
+  document.querySelectorAll(".sound-toggle").forEach((button) => {
+    button.addEventListener("click", () => {
+      musicEnabled = !musicEnabled;
+      window.localStorage.setItem(SOUND_STORAGE_KEY, musicEnabled ? "on" : "off");
+      if (musicEnabled) startNikeCityMusic();
+      else stopNikeCityMusic();
+      updateSoundButtons();
+    });
+  });
+
+  const startOnFirstGesture = () => {
+    if (musicEnabled) startNikeCityMusic();
+    window.removeEventListener("pointerdown", startOnFirstGesture);
+    window.removeEventListener("keydown", startOnFirstGesture);
+  };
+  window.addEventListener("pointerdown", startOnFirstGesture, { once: true });
+  window.addEventListener("keydown", startOnFirstGesture, { once: true });
+}
+
 document.addEventListener("click", (event) => {
   const link = event.target.closest("[data-page-transition]");
   if (!link) return;
@@ -1330,10 +3377,12 @@ bootHomeAnimations();
 bootHowPageAnimations();
 bootIntroCards();
 playPageEnter();
+initSoundControls();
 
 function animate(t) {
   if (!renderer || !controls) return;
   controls.update();
+  updateCityAtmosphere(t);
   scene.traverse((obj) => {
     if (obj.userData.float) obj.position.y += Math.sin(t * 0.002 + obj.userData.float) * 0.001;
   });

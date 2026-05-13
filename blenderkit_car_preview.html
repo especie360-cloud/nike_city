@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>BlenderKit car Nike City test</title>
+    <style>
+      :root { --yellow: #f7bd00; --ink: #111111; --paper: #f7f6f1; }
+      * { box-sizing: border-box; }
+      html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: var(--paper); color: var(--ink); font-family: Inter, Arial, sans-serif; }
+      canvas { display: block; width: 100%; height: 100%; }
+      .label { position: fixed; left: 28px; top: 26px; z-index: 2; display: inline-flex; align-items: center; min-height: 48px; border: 4px solid var(--ink); border-radius: 28px; background: var(--ink); color: #fff; font-size: 17px; font-weight: 900; text-transform: lowercase; box-shadow: 0 18px 34px rgba(17, 17, 17, 0.12); }
+      .label span { display: grid; place-items: center; width: 52px; height: 52px; margin: -6px 10px -6px -6px; border: 5px solid var(--ink); border-radius: 50%; background: var(--yellow); color: var(--ink); font-size: 18px; }
+      .label b { padding-right: 22px; }
+      .status { position: fixed; left: 32px; bottom: 28px; z-index: 2; max-width: min(560px, calc(100vw - 64px)); padding: 14px 18px; border: 2px solid rgba(17, 17, 17, 0.12); border-radius: 14px; background: rgba(247, 246, 241, 0.92); color: var(--ink); font-size: 13px; font-weight: 800; line-height: 1.35; box-shadow: 0 12px 28px rgba(17, 17, 17, 0.08); }
+      .status:empty { display: none; }
+    </style>
+  </head>
+  <body>
+    <div class="label"><span>◎</span><b>blenderkit_car_test</b></div>
+    <div class="status" id="status"></div>
+    <canvas id="stage"></canvas>
+    <script type="importmap">
+      { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/" } }
+    </script>
+    <script type="module">
+      import * as THREE from "three";
+      import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+      import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+      const canvas = document.querySelector("#stage");
+      const status = document.querySelector("#status");
+      if (location.protocol === "file:") status.textContent = "Abre este preview desde http://localhost:4174/blenderkit_car_preview.html";
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0xf7f6f1);
+      const camera = new THREE.OrthographicCamera(-6, 6, 4, -4, 0.1, 100);
+      camera.position.set(3.7, 4.2, 3.4); camera.lookAt(0, 0.3, 0);
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true; controls.dampingFactor = 0.08; controls.target.set(0, 0.35, 0); controls.minZoom = 0.8; controls.maxZoom = 3.6;
+      scene.add(new THREE.HemisphereLight(0xffffff, 0xd8d1c4, 1.9));
+      const sun = new THREE.DirectionalLight(0xffffff, 2.35); sun.position.set(6, 12, 5); scene.add(sun);
+      const loader = new GLTFLoader();
+      const clock = new THREE.Clock();
+      const mixers = [];
+      loader.load("assets/models/props/blenderkit_car_nike_test.glb?v=20260512_blenderkit_test_02", (gltf) => {
+        scene.add(gltf.scene);
+        if (gltf.animations.length) {
+          const mixer = new THREE.AnimationMixer(gltf.scene);
+          gltf.animations.forEach((clip) => mixer.clipAction(clip).play());
+          mixers.push(mixer);
+        }
+      }, undefined, (error) => {
+        status.textContent = "Aun falta exportar assets/models/props/blenderkit_car_nike_test.glb desde Blender.";
+        console.error(error);
+      });
+      function resize() {
+        const width = window.innerWidth, height = window.innerHeight;
+        renderer.setSize(width, height, false);
+        const aspect = width / height, frustum = width < 760 ? 2.5 : 1.95;
+        camera.left = -frustum * aspect; camera.right = frustum * aspect; camera.top = frustum; camera.bottom = -frustum; camera.updateProjectionMatrix();
+      }
+      window.addEventListener("resize", resize); resize();
+      function animate() {
+        const dt = clock.getDelta();
+        mixers.forEach((mixer) => mixer.update(dt));
+        controls.update();
+        renderer.render(scene, camera);
+        requestAnimationFrame(animate);
+      }
+      animate();
+    </script>
+  </body>
+</html>

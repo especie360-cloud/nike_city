@@ -127,6 +127,10 @@ button {
   cursor: pointer;
 }
 
+.sound-toggle.is-muted {
+  color: rgba(17, 17, 17, 0.58);
+}
+
 .sound-toggle span,
 .menu-toggle {
   display: grid;
@@ -1516,6 +1520,15 @@ button {
   width: 100%;
   height: 100%;
   display: block;
+  cursor: grab;
+}
+
+body.is-layout-pan-ready #city {
+  cursor: move;
+}
+
+body.is-layout-panning #city {
+  cursor: grabbing;
 }
 
 .brand-panel {
@@ -1579,6 +1592,379 @@ button {
   pointer-events: none;
 }
 
+.editor-panel-stack {
+  position: absolute;
+  top: 104px;
+  right: 28px;
+  z-index: 16;
+  display: grid;
+  width: min(310px, calc(100vw - 42px));
+  max-height: calc(100vh - 132px);
+  gap: 12px;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.zone-rotation-panel,
+.road-tools-panel,
+.editor-save-panel {
+  position: relative;
+  width: 100%;
+  padding: 14px;
+  border: 1px solid rgba(17, 17, 17, 0.16);
+  border-radius: 8px;
+  background: rgba(247, 246, 241, 0.92);
+  box-shadow: 0 18px 42px rgba(17, 17, 17, 0.14);
+  backdrop-filter: blur(12px);
+  pointer-events: auto;
+}
+
+.zone-rotation-panel,
+.road-tools-panel,
+.editor-save-panel {
+  max-height: calc(100vh - 172px);
+  overflow: auto;
+}
+
+.editor-save-panel {
+  display: grid;
+  gap: 7px;
+}
+
+.rotation-panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.rotation-panel-head strong {
+  color: #111;
+  font-size: 15px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.rotation-panel-head span {
+  color: rgba(17, 17, 17, 0.54);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.layout-panel-toggle,
+.road-panel-toggle,
+.save-panel-toggle {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 2px solid #111;
+  border-radius: 50%;
+  background: var(--yellow);
+  color: #111;
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.rotation-panel-note {
+  margin: -4px 0 12px;
+  color: rgba(17, 17, 17, 0.62);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.zone-rotation-panel.is-collapsed,
+.road-tools-panel.is-collapsed,
+.editor-save-panel.is-collapsed {
+  max-height: none;
+  overflow: visible;
+}
+
+.zone-rotation-panel.is-collapsed .rotation-panel-note,
+.zone-rotation-panel.is-collapsed .rotation-controls,
+.zone-rotation-panel.is-collapsed .island-builder,
+.zone-rotation-panel.is-collapsed .asset-builder,
+.zone-rotation-panel.is-collapsed .road-builder,
+.zone-rotation-panel.is-collapsed .zone-base-builder,
+.zone-rotation-panel.is-collapsed .layout-actions,
+.road-tools-panel.is-collapsed .road-builder,
+.editor-save-panel.is-collapsed .save-panel-body {
+  display: none;
+}
+
+.save-panel-body {
+  display: grid;
+  gap: 7px;
+}
+
+.rotation-controls {
+  display: grid;
+  gap: 10px;
+}
+
+.rotation-control {
+  display: grid;
+  grid-template-columns: 96px minmax(92px, 1fr) 44px;
+  align-items: center;
+  gap: 5px 9px;
+  color: #111;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.rotation-control input {
+  width: 100%;
+  accent-color: var(--yellow);
+  cursor: ew-resize;
+}
+
+.rotation-control output {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.rotation-control small {
+  grid-column: 2 / -1;
+  color: rgba(17, 17, 17, 0.55);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.island-builder,
+.asset-builder,
+.road-builder {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(17, 17, 17, 0.12);
+}
+
+.island-builder > strong,
+.asset-builder > strong,
+.road-builder > strong {
+  color: #111;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.island-type-list,
+.asset-type-list,
+.road-type-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+
+.island-type-list button,
+.asset-type-list button,
+.road-type-list button {
+  min-height: 32px;
+  border: 2px solid rgba(17, 17, 17, 0.24);
+  border-radius: 7px;
+  background: #fff;
+  color: #111;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.island-type-list button.is-active,
+.island-type-list button:hover,
+.asset-type-list button.is-active,
+.asset-type-list button:hover,
+.road-type-list button.is-active,
+.road-type-list button:hover {
+  border-color: #111;
+  background: var(--yellow);
+}
+
+.island-builder small,
+.asset-builder small,
+.road-builder small {
+  color: rgba(17, 17, 17, 0.58);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.island-editor,
+.asset-editor,
+.road-editor,
+.zone-base-builder {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(17, 17, 17, 0.1);
+}
+
+.tool-subtitle,
+.zone-base-builder > strong {
+  color: #111;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.island-editor label,
+.asset-editor label,
+.road-editor label,
+.zone-base-builder label {
+  display: grid;
+  grid-template-columns: 48px minmax(90px, 1fr) 42px;
+  align-items: center;
+  gap: 8px;
+  color: #111;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.island-editor input,
+.asset-editor input,
+.road-editor input,
+.zone-base-builder input {
+  width: 100%;
+  accent-color: var(--yellow);
+}
+
+.island-editor output,
+.asset-editor output,
+.road-editor output,
+.zone-base-builder output {
+  text-align: right;
+  color: rgba(17, 17, 17, 0.72);
+  font-size: 10px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.island-editor.is-empty label,
+.island-editor.is-empty .delete-island,
+.asset-editor.is-empty label,
+.asset-editor.is-empty .delete-asset,
+.road-editor.is-empty label,
+.road-editor.is-empty .delete-road {
+  opacity: 0.38;
+  pointer-events: none;
+}
+
+.island-editor:not(.is-empty) .island-editor-empty,
+.asset-editor:not(.is-empty) .asset-editor-empty,
+.road-editor:not(.is-empty) .road-editor-empty {
+  display: none;
+}
+
+.delete-island,
+.delete-asset,
+.delete-road {
+  height: 32px;
+  border: 2px solid #111;
+  border-radius: 7px;
+  background: #fff;
+  color: #111;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.delete-island:hover,
+.delete-asset:hover,
+.delete-road:hover {
+  background: #111;
+  color: var(--yellow);
+}
+
+.road-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.zone-base-builder {
+  margin-top: 14px;
+  padding-top: 12px;
+}
+
+.zone-base-select {
+  height: 34px;
+  border: 2px solid rgba(17, 17, 17, 0.22);
+  border-radius: 7px;
+  background: #fff;
+  color: #111;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.layout-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.copy-rotation-values,
+.refresh-layout-values,
+.copy-road-values,
+.clear-road-values,
+.save-all-editor-values {
+  width: 100%;
+  height: 38px;
+  border: 2px solid #111;
+  border-radius: 8px;
+  background: #111;
+  color: var(--yellow);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: transform 0.18s ease, background 0.18s ease, color 0.18s ease;
+}
+
+.refresh-layout-values,
+.clear-road-values {
+  background: #fff;
+  color: #111;
+}
+
+.copy-rotation-values:hover,
+.refresh-layout-values:hover,
+.copy-road-values:hover,
+.clear-road-values:hover,
+.save-all-editor-values:hover {
+  transform: translateY(-1px);
+  background: var(--yellow);
+  color: #111;
+}
+
+.zone-rotation-panel.is-copied .copy-rotation-values,
+.save-all-editor-values.is-saved {
+  background: var(--yellow);
+  color: #111;
+}
+
+.editor-save-panel small {
+  color: rgba(17, 17, 17, 0.58);
+  font-size: 10px;
+  font-weight: 900;
+  text-align: center;
+  text-transform: uppercase;
+}
+
 .zone-label {
   position: absolute;
   display: flex;
@@ -1626,6 +2012,24 @@ button {
   font-size: 17px;
   font-weight: 900;
   text-align: center;
+}
+
+.zone-label.zone-parking::before {
+  background: #111;
+}
+
+.zone-label.zone-parking .icon {
+  left: 9px;
+  top: 5px;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #fff;
+  color: #111;
+  font-size: 18px;
+  line-height: 1;
 }
 
 .zone-label .copy {
